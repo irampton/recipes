@@ -6,6 +6,7 @@ const state = reactive({
   loading: false,
   error: null,
   ready: false,
+  importedDraft: null,
 });
 
 const sortByTitle = (list) =>
@@ -53,4 +54,12 @@ export const useRecipeStore = () => ({
   loadRecipes,
   saveRecipe,
   getRecipeById,
+  setImportedDraft: (draft) => {
+    state.importedDraft = draft || null;
+  },
+  consumeImportedDraft: () => {
+    const draft = state.importedDraft;
+    state.importedDraft = null;
+    return draft;
+  },
 });

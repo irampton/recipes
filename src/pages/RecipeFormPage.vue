@@ -9,6 +9,16 @@
         </div>
         <div class="flex gap-3">
           <RouterLink
+            v-if="!isEditing"
+            :to="{ name: 'recipe-import' }"
+            class="inline-flex items-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12h16M12 4l8 8-8 8" />
+            </svg>
+            Import via LLM
+          </RouterLink>
+          <RouterLink
             v-if="isEditing && currentRecipe"
             :to="{ name: 'recipe-detail', params: { id: currentRecipe.id } }"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-emerald-200 hover:text-emerald-700"
@@ -254,29 +264,59 @@ const currentRecipe = computed(() => store.getRecipeById(route.params.id));
 const isEditing = computed(() => Boolean(route.params.id));
 const units = ['cup', 'tbsp', 'tsp', 'g', 'kg', 'oz', 'ml', 'l', 'piece', 'pinch'];
 
-const hydrateForm = () => {
-  if (!isEditing.value || !currentRecipe.value) return;
-  const data = currentRecipe.value;
-  form.title = data.title || '';
-  form.description = data.description || '';
-  form.author = data.author || '';
-  form.createdAt = data.createdAt ? new Date(data.createdAt).toISOString().slice(0, 10) : today;
-  form.ingredients = (data.ingredients || []).map((item) => ({
+const applyDraft = (data, { replaceExisting = false } = {}) => {
+  if (!data) return;
+  const setField = (key, value) => {
+    if (replaceExisting || value) {
+      form[key] = value ?? '';
+    }
+  };
+
+  setField('title', data.title);
+  setField('description', data.description);
+  setField('author', data.author);
+  if (replaceExisting && data.createdAt) {
+    form.createdAt = new Date(data.createdAt).toISOString().slice(0, 10);
+  }
+
+  const nextIngredients = (data.ingredients || []).map((item) => ({
     id: item.id || makeId(),
     name: item.name || '',
     quantity: item.quantity ?? '',
     unit: item.unit || '',
   }));
-  if (!form.ingredients.length) {
-    form.ingredients.push(blankIngredient());
+  if (replaceExisting || nextIngredients.length) {
+    form.ingredients = nextIngredients.length ? nextIngredients : [blankIngredient()];
   }
-  form.steps = (data.steps && data.steps.length ? [...data.steps] : ['']).map((step) => step || '');
-  tagInput.value = (data.tags || []).join(', ');
+
+  const nextSteps = (data.steps && data.steps.length ? [...data.steps] : ['']).map((step) => step || '');
+  if (replaceExisting || (data.steps && data.steps.length)) {
+    form.steps = nextSteps;
+  }
+
+  if (replaceExisting || (data.tags && data.tags.length)) {
+    tagInput.value = (data.tags || []).join(', ');
+  }
+};
+
+const hydrateForm = () => {
+  if (!isEditing.value || !currentRecipe.value) return;
+  applyDraft(currentRecipe.value, { replaceExisting: true });
 };
 
 watch(
   () => currentRecipe.value,
   () => hydrateForm(),
+  { immediate: true }
+);
+
+watch(
+  () => store.state.importedDraft,
+  (draft) => {
+    if (!draft || isEditing.value) return;
+    applyDraft(draft, { replaceExisting: true });
+    store.consumeImportedDraft();
+  },
   { immediate: true }
 );
 

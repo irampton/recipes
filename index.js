@@ -5,6 +5,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { Server } from "socket.io";
 import { fileURLToPath } from "node:url";
+import { buildRecipeFromText } from "./LLM.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,6 +81,22 @@ if (!fs.existsSync(indexHtmlPath)) {
 }
 
 app.use(express.static(distDir));
+
+app.post("/api/llm-import", async (req, res) => {
+  const { text } = req.body || {};
+  if (!text || !text.trim()) {
+    res.status(400).json({ success: false, error: "Please provide some text to import." });
+    return;
+  }
+
+  try {
+    const recipe = await buildRecipeFromText(text);
+    res.json({ success: true, data: recipe });
+  } catch (error) {
+    console.error("[llm] import failed:", error);
+    res.status(500).json({ success: false, error: "Unable to import recipe right now." });
+  }
+});
 
 io.on("connection", (socket) => {
   socket.emit("recipes:updated", recipes);
