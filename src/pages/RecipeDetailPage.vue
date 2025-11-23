@@ -34,64 +34,13 @@
 
     <div v-else class="space-y-6">
       <div class="flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-start md:justify-between">
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div class="flex flex-wrap items-center gap-3">
             <span class="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600">Recipe</span>
             <span class="text-xs text-slate-500">{{ metaLine }}</span>
           </div>
           <h1 class="text-3xl font-bold text-slate-900">{{ recipe.title }}</h1>
           <p class="text-slate-600" v-if="recipe.description">{{ recipe.description }}</p>
-        </div>
-        <button
-          type="button"
-          class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
-          @click="editRecipe"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.06 6.19l2.75 2.75" />
-          </svg>
-          Edit
-        </button>
-      </div>
-
-      <div class="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-slate-900">Ingredients</h2>
-            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">What you'll need</span>
-          </div>
-          <ul class="mt-4 space-y-3">
-            <li
-              v-for="item in recipe.ingredients"
-              :key="item.id"
-              class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-            >
-              <span class="font-semibold text-slate-900">
-                {{ item.quantity }} <span v-if="item.unit">{{ item.unit }}</span>
-              </span>
-              <span class="truncate">{{ item.name }}</span>
-            </li>
-            <li v-if="!recipe.ingredients?.length" class="text-sm text-slate-500">No ingredients added yet.</li>
-          </ul>
-        </div>
-
-        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-slate-900">Details</h2>
-            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Edit tags inline</span>
-          </div>
-          <dl class="grid gap-3 text-sm text-slate-700">
-            <div>
-              <dt class="text-xs uppercase tracking-wide text-slate-500">Author / Source</dt>
-              <dd class="font-medium text-slate-900">{{ recipe.author || 'Unknown' }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase tracking-wide text-slate-500">Created</dt>
-              <dd class="font-medium text-slate-900">{{ formattedDate }}</dd>
-            </div>
-          </dl>
-
           <div class="space-y-2">
             <div class="flex flex-wrap items-center gap-2">
               <TagPill v-for="tag in recipe.tags" :key="`${recipe.id}-${tag}`">
@@ -152,26 +101,57 @@
             </div>
           </div>
         </div>
+        <button
+          type="button"
+          class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
+          @click="editRecipe"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.06 6.19l2.75 2.75" />
+          </svg>
+          Edit
+        </button>
       </div>
 
-      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-slate-900">Directions</h2>
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Step-by-step</span>
+      <div class="grid gap-4 lg:grid-cols-[1fr_2fr]">
+        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-slate-900">Ingredients</h2>
+          </div>
+          <ul class="mt-4 space-y-3">
+            <li
+              v-for="item in recipe.ingredients"
+              :key="item.id"
+              class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            >
+              <span class="font-semibold text-slate-900">
+                {{ item.quantity }} <span v-if="item.unit">{{ item.unit }}</span>
+              </span>
+              <span class="truncate">{{ item.name }}</span>
+            </li>
+            <li v-if="!recipe.ingredients?.length" class="text-sm text-slate-500">No ingredients added yet.</li>
+          </ul>
         </div>
-        <ol class="mt-4 space-y-4">
-          <li
-            v-for="(step, index) in recipe.steps"
-            :key="`${recipe.id}-step-${index}`"
-            class="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 shadow-sm"
-          >
-            <div class="flex flex-col gap-1 min-h-[56px]">
-              <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Step {{ index + 1 }}</span>
-              <p class="leading-relaxed">{{ step || 'No instructions yet.' }}</p>
-            </div>
-          </li>
-          <li v-if="!recipe.steps?.length" class="text-sm text-slate-500">No steps added yet.</li>
-        </ol>
+
+        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-slate-900">Directions</h2>
+          </div>
+          <ol class="mt-4 space-y-4">
+            <li
+              v-for="(step, index) in recipe.steps"
+              :key="`${recipe.id}-step-${index}`"
+              class="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 shadow-sm"
+            >
+              <div class="flex flex-col gap-1 min-h-[56px]">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Step {{ index + 1 }}</span>
+                <p class="leading-relaxed">{{ step || 'No instructions yet.' }}</p>
+              </div>
+            </li>
+            <li v-if="!recipe.steps?.length" class="text-sm text-slate-500">No steps added yet.</li>
+          </ol>
+        </div>
       </div>
     </div>
   </section>
