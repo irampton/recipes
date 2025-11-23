@@ -51,10 +51,7 @@
             class="flex items-center gap-2 px-3 py-3 text-sm transition hover:bg-orange-50"
             :class="{ 'bg-orange-50 text-orange-800 font-semibold': activeId === recipe.id }"
           >
-            <span class="truncate">{{ recipe.title }}</span>
-            <div class="flex flex-wrap gap-1 overflow-hidden">
-              <TagPill v-for="tag in recipe.tags" :key="`${recipe.id}-${tag}`" :label="tag" />
-            </div>
+            <span class="truncate whitespace-nowrap">{{ recipe.title }}</span>
           </RouterLink>
         </li>
       </ul>
@@ -64,7 +61,6 @@
 
 <script setup>
 import { RouterLink } from 'vue-router';
-import TagPill from './TagPill.vue';
 
 defineProps({
   recipes: {

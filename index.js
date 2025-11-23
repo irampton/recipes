@@ -131,6 +131,23 @@ io.on("connection", (socket) => {
     io.emit("recipes:updated", recipes);
     reply({ success: true, data: normalized });
   });
+
+  socket.on("recipe:delete", (id, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    if (!id) {
+      reply({ success: false, error: "Missing recipe id." });
+      return;
+    }
+    const idx = recipes.findIndex((r) => r.id === id);
+    if (idx === -1) {
+      reply({ success: false, error: "Recipe not found." });
+      return;
+    }
+    recipes.splice(idx, 1);
+    writeRecipes(recipes);
+    io.emit("recipes:updated", recipes);
+    reply({ success: true });
+  });
 });
 
 app.get("/{*splat}", (req, res) => {

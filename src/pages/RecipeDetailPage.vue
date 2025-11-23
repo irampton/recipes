@@ -101,17 +101,33 @@
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
-          @click="editRecipe"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.06 6.19l2.75 2.75" />
-          </svg>
-          Edit
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
+            @click="editRecipe"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.06 6.19l2.75 2.75" />
+            </svg>
+            Edit
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-rose-700 shadow-sm transition hover:border-rose-300 hover:text-rose-800 active:scale-95"
+            @click="openDeleteDialog"
+            title="Delete recipe"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 6h18" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 6v12a2 2 0 002 2h4a2 2 0 002-2V6" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 10v6m4-6v6" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 6l1-2h4l1 2" />
+            </svg>
+            Delete
+          </button>
+        </div>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[1fr_2fr]">
@@ -119,19 +135,25 @@
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold text-slate-900">Ingredients</h2>
           </div>
-          <ul class="mt-4 space-y-3">
-            <li
-              v-for="item in recipe.ingredients"
-              :key="item.id"
-              class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-            >
-              <span class="font-semibold text-slate-900">
-                {{ item.quantity }} <span v-if="item.unit">{{ item.unit }}</span>
-              </span>
-              <span class="truncate">{{ item.name }}</span>
-            </li>
-            <li v-if="!recipe.ingredients?.length" class="text-sm text-slate-500">No ingredients added yet.</li>
-          </ul>
+          <div class="mt-4 rounded-xl border border-slate-200">
+            <ul class="divide-y divide-slate-200 text-sm text-slate-800">
+              <li
+                v-for="(item, idx) in recipe.ingredients"
+                :key="item.id || idx"
+                class="grid grid-cols-[2.5em_3em_1fr] items-center gap-2 px-4 py-2"
+              >
+                <span class="font-semibold text-slate-900 text-right">{{ item.quantity }}</span>
+                <span
+                  class="truncate text-slate-700 text-left"
+                  :title="item.unit"
+                >
+                  {{ formatUnit(item.unit, item.quantity) }}
+                </span>
+                <span class="truncate" :title="item.name">{{ item.name }}</span>
+              </li>
+              <li v-if="!recipe.ingredients?.length" class="px-4 py-3 text-sm text-slate-500">No ingredients added yet.</li>
+            </ul>
+          </div>
         </div>
 
         <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
@@ -153,6 +175,15 @@
           </ol>
         </div>
       </div>
+
+      <ConfirmDialog
+        :open="showDeleteConfirm"
+        title="Delete this recipe?"
+        message="This will permanently remove the recipe. This cannot be undone."
+        confirm-label="Delete"
+        @cancel="cancelDelete"
+        @confirm="confirmDelete"
+      />
     </div>
   </section>
 </template>
@@ -161,6 +192,7 @@
 import { computed, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import TagPill from '../components/TagPill.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useRecipeStore } from '../stores/recipeStore';
 
 const store = useRecipeStore();
@@ -170,6 +202,8 @@ const router = useRouter();
 const recipe = computed(() => store.getRecipeById(route.params.id));
 const tagInput = ref('');
 const showTagInput = ref(false);
+const showDeleteConfirm = ref(false);
+const deleting = ref(false);
 
 const formattedDate = computed(() => {
   if (!recipe.value?.createdAt) return 'Not set';
@@ -181,6 +215,78 @@ const metaLine = computed(() => {
   const author = recipe.value?.author || 'Unknown author';
   return `${author} • ${formattedDate.value}`;
 });
+
+const abbreviations = {
+  tablespoon: 'tbsp',
+  tablespoons: 'tbsp',
+  tbsp: 'tbsp',
+  teaspoon: 'tsp',
+  teaspoons: 'tsp',
+  tsp: 'tsp',
+  gram: 'g',
+  grams: 'g',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  ounce: 'oz',
+  ounces: 'oz',
+  milliliter: 'ml',
+  milliliters: 'ml',
+  liter: 'l',
+  liters: 'l',
+  piece: 'pc',
+  pieces: 'pc',
+  pinch: 'pinch',
+};
+
+const parseQuantityNumber = (quantity) => {
+  const val = (quantity || '').toString().trim();
+  if (!val) return null;
+  // handle mixed numbers like "1 1/2"
+  const parts = val.split(' ');
+  let total = 0;
+  parts.forEach((part) => {
+    if (part.includes('/')) {
+      const [num, den] = part.split('/').map(Number);
+      if (!Number.isNaN(num) && !Number.isNaN(den) && den !== 0) total += num / den;
+    } else {
+      const n = Number(part);
+      if (!Number.isNaN(n)) total += n;
+    }
+  });
+  return total || null;
+};
+
+const formatUnit = (unit, quantity) => {
+  const key = (unit || '').toLowerCase().trim();
+  if (key === 'cup' || key === 'cups') {
+    const qtyNum = parseQuantityNumber(quantity);
+    const isSingular = qtyNum === 1;
+    return isSingular ? 'cup' : 'cups';
+  }
+  return abbreviations[key] || unit;
+};
+
+const openDeleteDialog = () => {
+  showDeleteConfirm.value = true;
+};
+
+const cancelDelete = () => {
+  showDeleteConfirm.value = false;
+};
+
+const confirmDelete = async () => {
+  if (!recipe.value) return;
+  deleting.value = true;
+  try {
+    await store.deleteRecipe(recipe.value.id);
+    router.push({ name: 'home' });
+  } catch (error) {
+    console.error(error);
+  } finally {
+    deleting.value = false;
+    showDeleteConfirm.value = false;
+  }
+};
 
 const editRecipe = () => {
   if (recipe.value) {

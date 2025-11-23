@@ -47,12 +47,28 @@ const saveRecipe = (recipe) =>
     });
   });
 
+const deleteRecipe = (id) =>
+  new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('Missing recipe id.'));
+    state.error = null;
+    socket.emit('recipe:delete', id, (response) => {
+      if (response?.success) {
+        resolve(true);
+      } else {
+        const err = response?.error || 'Unable to delete recipe.';
+        state.error = err;
+        reject(new Error(err));
+      }
+    });
+  });
+
 const getRecipeById = (id) => state.recipes.find((recipe) => recipe.id === id);
 
 export const useRecipeStore = () => ({
   state,
   loadRecipes,
   saveRecipe,
+  deleteRecipe,
   getRecipeById,
   setImportedDraft: (draft) => {
     state.importedDraft = draft || null;

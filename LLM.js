@@ -20,6 +20,8 @@ Rules:
 - Standardized ingredients (remove brand names, etc.)
 - If there is no title or description provided, choose one
 - Provide 3-4 concise tags focused on meal type and main ingredients (e.g., "dinner", "dessert", "pumpkin", "chicken", "pasta"); omit dietary labels unless given.
+- Units must be chosen ONLY from this list: ["cup","tbsp","tsp","g","kg","oz","ml","l","piece","pinch"]. Convert close variants (cups, tablespoons, tsp., etc.) to the closest allowed unit. If you cannot map it, leave unit as an empty string.
+- Express customary measurements as simple fractions where applicable (e.g., 1/2, 1/3, 1/4, 3/4).
 - Use empty strings/arrays when something is missing.
 - Do NOT add extra fields beyond the JSON shape. Respond with JSON only, no prose.`;
 
@@ -49,7 +51,60 @@ const arrayFrom = (value) => {
   return [];
 };
 
+const normalizeUnit = (unit) => {
+  const allowed = ["cup", "tbsp", "tsp", "g", "kg", "oz", "ml", "l", "piece", "pinch"];
+  if (!unit) return "";
+  const key = unit.toString().toLowerCase().replace(/\./g, "").trim();
+  const mapping = {
+    c: "cup",
+    cup: "cup",
+    cups: "cup",
+    tablespoon: "tbsp",
+    tablespoons: "tbsp",
+    tbsp: "tbsp",
+    tbs: "tbsp",
+    tablespoonful: "tbsp",
+    teaspoon: "tsp",
+    teaspoons: "tsp",
+    tsp: "tsp",
+    tsps: "tsp",
+    gram: "g",
+    grams: "g",
+    g: "g",
+    kilogram: "kg",
+    kilograms: "kg",
+    kg: "kg",
+    kgs: "kg",
+    ounce: "oz",
+    ounces: "oz",
+    oz: "oz",
+    milliliter: "ml",
+    milliliters: "ml",
+    ml: "ml",
+    liter: "l",
+    litres: "l",
+    litre: "l",
+    l: "l",
+    piece: "piece",
+    pieces: "piece",
+    pc: "piece",
+    pcs: "piece",
+    pinch: "pinch",
+    pinches: "pinch",
+  };
+  const normalized = mapping[key];
+  if (normalized && allowed.includes(normalized)) return normalized;
+  if (allowed.includes(key)) return key;
+  return "";
+};
+
 const normalizeIngredient = (item) => {
+  const sentenceCase = (value) => {
+    const str = (value || "").toString().trim();
+    if (!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
+
   const base =
     typeof item === "string"
       ? { name: item.trim(), quantity: "", unit: "" }
@@ -61,9 +116,9 @@ const normalizeIngredient = (item) => {
 
   return {
     id: item?.id || crypto.randomUUID(),
-    name: base.name,
+    name: sentenceCase(base.name),
     quantity: base.quantity,
-    unit: base.unit,
+    unit: normalizeUnit(base.unit),
   };
 };
 
