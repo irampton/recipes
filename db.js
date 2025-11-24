@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,8 +11,37 @@ const resolvedDbPath = path.isAbsolute(dbPath) ? dbPath : path.join(__dirname, d
 
 const db = new Database(resolvedDbPath);
 db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
 
-db.prepare(`
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    passwordHash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'user')),
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    expiresAt TEXT NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS join_codes (
+    code TEXT PRIMARY KEY,
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'user')),
+    createdAt TEXT NOT NULL,
+    createdBy TEXT,
+    usedBy TEXT,
+    usedAt TEXT,
+    expiresAt TEXT,
+    maxUses INTEGER DEFAULT 1,
+    usedCount INTEGER DEFAULT 0
+  );
+
   CREATE TABLE IF NOT EXISTS recipes (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -21,30 +51,33 @@ db.prepare(`
     tags TEXT DEFAULT '[]',
     ingredients TEXT DEFAULT '[]',
     steps TEXT DEFAULT '[]',
-    ownerId TEXT DEFAULT '',
+    ownerId TEXT NOT NULL,
     isPublic INTEGER DEFAULT 0,
-    notes TEXT DEFAULT ''
-  )
-`).run();
+    notes TEXT DEFAULT '',
+    FOREIGN KEY (ownerId) REFERENCES users(id)
+  );
 
-const selectAllStmt = db.prepare("SELECT * FROM recipes ORDER BY title COLLATE NOCASE");
-const selectOneStmt = db.prepare("SELECT * FROM recipes WHERE id = ?");
-const upsertStmt = db.prepare(`
-  INSERT INTO recipes (id, title, description, author, createdAt, tags, ingredients, steps, ownerId, isPublic, notes)
-  VALUES (@id, @title, @description, @author, @createdAt, @tags, @ingredients, @steps, @ownerId, @isPublic, @notes)
-  ON CONFLICT(id) DO UPDATE SET
-    title=excluded.title,
-    description=excluded.description,
-    author=excluded.author,
-    createdAt=excluded.createdAt,
-    tags=excluded.tags,
-    ingredients=excluded.ingredients,
-    steps=excluded.steps,
-    ownerId=excluded.ownerId,
-    isPublic=excluded.isPublic,
-    notes=excluded.notes
+  CREATE INDEX IF NOT EXISTS idx_recipes_owner ON recipes(ownerId);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId);
+  CREATE INDEX IF NOT EXISTS idx_join_codes_used ON join_codes(usedBy);
 `);
-const deleteStmt = db.prepare("DELETE FROM recipes WHERE id = ?");
+
+const joinCodeColumns = db.prepare("PRAGMA table_info('join_codes')").all();
+const hasMaxUses = joinCodeColumns.some((col) => col.name === "maxUses");
+const hasUsedCount = joinCodeColumns.some((col) => col.name === "usedCount");
+if (!hasMaxUses) {
+  db.exec("ALTER TABLE join_codes ADD COLUMN maxUses INTEGER DEFAULT 1;");
+}
+if (!hasUsedCount) {
+  db.exec("ALTER TABLE join_codes ADD COLUMN usedCount INTEGER DEFAULT 0;");
+}
+
+// Normalize any legacy codes with dashes into dash-less uppercase form
+try {
+  db.exec("UPDATE join_codes SET code = REPLACE(UPPER(code), '-', '') WHERE code LIKE '%-%';");
+} catch {
+  // ignore migration issues; future creates use normalized codes
+}
 
 const parseJson = (value, fallback) => {
   try {
@@ -82,19 +115,249 @@ const serializeRecipe = (recipe) => ({
   notes: recipe.notes ?? "",
 });
 
-export const getRecipes = () => selectAllStmt.all().map(rowToRecipe);
+export const getRecipesForOwner = (ownerId) => {
+  if (!ownerId) return [];
+  const stmt = db.prepare("SELECT * FROM recipes WHERE ownerId = ? ORDER BY title COLLATE NOCASE");
+  return stmt.all(ownerId).map(rowToRecipe);
+};
 
-export const getRecipeById = (id) => {
-  const row = selectOneStmt.get(id);
+export const getRecipeById = (id, ownerId) => {
+  const stmt = db.prepare("SELECT * FROM recipes WHERE id = ? AND ownerId = ?");
+  const row = stmt.get(id, ownerId);
   return row ? rowToRecipe(row) : null;
 };
 
 export const saveRecipe = (recipe) => {
+  const upsertStmt = db.prepare(`
+    INSERT INTO recipes (id, title, description, author, createdAt, tags, ingredients, steps, ownerId, isPublic, notes)
+    VALUES (@id, @title, @description, @author, @createdAt, @tags, @ingredients, @steps, @ownerId, @isPublic, @notes)
+    ON CONFLICT(id) DO UPDATE SET
+      title=excluded.title,
+      description=excluded.description,
+      author=excluded.author,
+      createdAt=excluded.createdAt,
+      tags=excluded.tags,
+      ingredients=excluded.ingredients,
+      steps=excluded.steps,
+      ownerId=excluded.ownerId,
+      isPublic=excluded.isPublic,
+      notes=excluded.notes
+  `);
   upsertStmt.run(serializeRecipe(recipe));
-  return getRecipeById(recipe.id);
+  return getRecipeById(recipe.id, recipe.ownerId);
 };
 
-export const deleteRecipe = (id) => {
-  const info = deleteStmt.run(id);
+export const deleteRecipe = (id, ownerId) => {
+  const stmt = db.prepare("DELETE FROM recipes WHERE id = ? AND ownerId = ?");
+  const info = stmt.run(id, ownerId);
   return info.changes > 0;
+};
+
+const userColumns = "id, username, role, createdAt, passwordHash";
+const userSafeColumns = "id, username, role, createdAt";
+
+export const findUserByUsername = (username) => {
+  const stmt = db.prepare(`SELECT ${userColumns} FROM users WHERE username = ?`);
+  return stmt.get(username) || null;
+};
+
+export const findUserById = (id) => {
+  const stmt = db.prepare(`SELECT ${userColumns} FROM users WHERE id = ?`);
+  return stmt.get(id) || null;
+};
+
+export const getUsers = () => {
+  const stmt = db.prepare(`SELECT ${userSafeColumns} FROM users ORDER BY createdAt ASC`);
+  return stmt.all();
+};
+
+export const createUser = ({ id, username, passwordHash, role, createdAt }) => {
+  const stmt = db.prepare(
+    "INSERT INTO users (id, username, passwordHash, role, createdAt) VALUES (@id, @username, @passwordHash, @role, @createdAt)"
+  );
+  stmt.run({ id, username, passwordHash, role, createdAt });
+  return findUserById(id);
+};
+
+export const deleteUser = (id) => {
+  const stmt = db.prepare("DELETE FROM users WHERE id = ?");
+  const info = stmt.run(id);
+  return info.changes > 0;
+};
+
+export const updateUserRole = (id, role) => {
+  const stmt = db.prepare("UPDATE users SET role = ? WHERE id = ?");
+  const info = stmt.run(role, id);
+  return info.changes > 0;
+};
+
+export const countOwners = () => {
+  const stmt = db.prepare("SELECT COUNT(*) as total FROM users WHERE role = 'owner'");
+  return stmt.get().total || 0;
+};
+
+const sessionWithUserStmt = db.prepare(`
+  SELECT sessions.id as sessionId, sessions.userId, sessions.createdAt as sessionCreatedAt, sessions.expiresAt,
+         users.id, users.username, users.role, users.createdAt
+  FROM sessions
+  JOIN users ON users.id = sessions.userId
+  WHERE sessions.id = ?
+`);
+
+export const getSessionWithUser = (sessionId) => {
+  if (!sessionId) return null;
+  const row = sessionWithUserStmt.get(sessionId);
+  if (!row) return null;
+
+  const now = new Date();
+  const expires = new Date(row.expiresAt);
+  if (expires < now) {
+    deleteSession(sessionId);
+    return null;
+  }
+
+  return {
+    sessionId: row.sessionId,
+    expiresAt: row.expiresAt,
+    user: {
+      id: row.id,
+      username: row.username,
+      role: row.role,
+      createdAt: row.createdAt,
+    },
+  };
+};
+
+export const createSession = (userId, ttlMs) => {
+  const id = crypto.randomUUID();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ttlMs);
+  const stmt = db.prepare(
+    "INSERT INTO sessions (id, userId, createdAt, expiresAt) VALUES (@id, @userId, @createdAt, @expiresAt)"
+  );
+  stmt.run({
+    id,
+    userId,
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  });
+  return { id, expiresAt: expiresAt.toISOString() };
+};
+
+export const deleteSession = (sessionId) => {
+  const stmt = db.prepare("DELETE FROM sessions WHERE id = ?");
+  stmt.run(sessionId);
+};
+
+export const purgeUserSessions = (userId) => {
+  const stmt = db.prepare("DELETE FROM sessions WHERE userId = ?");
+  stmt.run(userId);
+};
+
+const generateJoinCodeValue = () => {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  while (code.length < 7) {
+    const idx = Math.floor(Math.random() * alphabet.length);
+    code += alphabet[idx];
+  }
+  return code;
+};
+
+const normalizeJoinCodeInput = (code) => (code || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+
+export const normalizeJoinCode = normalizeJoinCodeInput;
+
+export const deleteJoinCode = (code) => {
+  const normalized = normalizeJoinCodeInput(code);
+  const stmt = db.prepare("DELETE FROM join_codes WHERE code = ?");
+  stmt.run(normalized);
+};
+
+export const deleteOwnerJoinCodes = () => {
+  const stmt = db.prepare("DELETE FROM join_codes WHERE role = 'owner'");
+  stmt.run();
+};
+
+export const getOwnerJoinCodes = () => {
+  const stmt = db.prepare("SELECT * FROM join_codes WHERE role = 'owner'");
+  return stmt.all();
+};
+
+export const createJoinCode = ({ role, createdBy, expiresAt, maxUses = 1 }) => {
+  let code = generateJoinCodeValue();
+  const existsStmt = db.prepare("SELECT 1 FROM join_codes WHERE code = ?");
+  while (existsStmt.get(code)) {
+    code = generateJoinCodeValue();
+  }
+
+  const stmt = db.prepare(
+    "INSERT INTO join_codes (code, role, createdAt, createdBy, expiresAt, maxUses, usedCount) VALUES (@code, @role, @createdAt, @createdBy, @expiresAt, @maxUses, 0)"
+  );
+  stmt.run({
+    code,
+    role,
+    createdAt: new Date().toISOString(),
+    createdBy: createdBy || null,
+    expiresAt: expiresAt || null,
+    maxUses: Math.max(1, maxUses || 1),
+  });
+  return code;
+};
+
+export const consumeJoinCode = (code) => {
+  const normalized = normalizeJoinCodeInput(code);
+  if (normalized.length !== 7) return null;
+  const stmt = db.prepare("SELECT * FROM join_codes WHERE code = ?");
+  const record = stmt.get(normalized);
+  if (!record) return null;
+
+  const now = new Date();
+  if (record.expiresAt && new Date(record.expiresAt) < now) {
+    deleteJoinCode(normalized);
+    return null;
+  }
+  if (record.usedCount >= record.maxUses) {
+    deleteJoinCode(normalized);
+    return null;
+  }
+
+  return record;
+};
+
+export const markJoinCodeUsed = (code, userId) => {
+  const normalized = normalizeJoinCodeInput(code);
+  const stmt = db.prepare(
+    "UPDATE join_codes SET usedBy = @userId, usedAt = @usedAt, usedCount = usedCount + 1 WHERE code = @code"
+  );
+  const info = stmt.run({
+    userId,
+    usedAt: new Date().toISOString(),
+    code: normalized,
+  });
+
+  if (info.changes > 0) {
+    const updated = db.prepare("SELECT usedCount, maxUses FROM join_codes WHERE code = ?").get(normalized);
+    if (updated && updated.usedCount >= updated.maxUses) {
+      deleteJoinCode(normalized);
+    }
+  }
+
+  return info.changes > 0;
+};
+
+export const listJoinCodes = () => {
+  const stmt = db.prepare(
+    "SELECT code, role, createdAt, createdBy, usedBy, usedAt, expiresAt, maxUses, usedCount FROM join_codes"
+  );
+  return stmt.all();
+};
+
+export const ensureOwnerJoinCode = () => {
+  if (countOwners() > 0) return null;
+  const existing = getOwnerJoinCodes();
+  const code = existing.length ? existing[0].code : createJoinCode({ role: "owner" });
+  const printable = `${code.slice(0, 4)}-${code.slice(4)}`;
+  console.log(`[auth] No owner found. Use join code ${printable} for the first signup to become owner.`);
+  return code;
 };

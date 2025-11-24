@@ -17,7 +17,20 @@ socket.on('recipes:updated', (payload) => {
   state.ready = true;
 });
 
+socket.on('connect', () => {
+  if (!state.ready) {
+    loadRecipes();
+  }
+});
+
+socket.on('disconnect', () => {
+  state.ready = false;
+});
+
 const loadRecipes = () => {
+  if (!socket.connected) {
+    socket.connect();
+  }
   if (state.loading) return;
   state.loading = true;
   state.error = null;
@@ -70,6 +83,11 @@ export const useRecipeStore = () => ({
   saveRecipe,
   deleteRecipe,
   getRecipeById,
+  reset: () => {
+    state.recipes = [];
+    state.ready = false;
+    state.error = null;
+  },
   setImportedDraft: (draft) => {
     state.importedDraft = draft || null;
   },
