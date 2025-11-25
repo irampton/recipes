@@ -1,14 +1,18 @@
 <template>
   <section class="mx-auto flex max-w-5xl flex-col gap-6">
     <div
-      v-if="store.state.loading && !store.state.ready"
+      v-if="!isShareRoute && store.state.loading && !store.state.ready"
       class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm"
     >
       Loading recipe…
     </div>
 
+    <div v-else-if="isShareRoute && shareLoading" class="rounded-xl border border-slate-200 bg-white px-4 py-5 text-slate-700 shadow-sm md:px-6">
+      <p class="text-sm">Loading shared recipe…</p>
+    </div>
+
     <div
-      v-else-if="!recipe"
+      v-else-if="!recipe && !isShareRoute"
       class="rounded-xl border border-slate-200 bg-white px-4 py-5 text-slate-700 shadow-sm md:px-6"
     >
       <p class="text-lg font-semibold text-slate-900">Recipe not found</p>
@@ -30,6 +34,11 @@
       </div>
     </div>
 
+    <div v-else-if="shareError" class="rounded-xl border border-slate-200 bg-white px-4 py-5 text-slate-700 shadow-sm md:px-6">
+      <p class="text-lg font-semibold text-slate-900">Unable to load shared recipe</p>
+      <p class="mt-1 text-sm">{{ shareError }}</p>
+    </div>
+
     <div v-else class="space-y-6">
       <div class="flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-start md:justify-between">
         <div class="space-y-4">
@@ -42,6 +51,7 @@
                 <template #default>
                   <span class="truncate">{{ tag }}</span>
                   <button
+                    v-if="!isShareRoute"
                     type="button"
                     class="hidden h-4 w-4 items-center justify-center rounded-full bg-orange-200 text-orange-800 hover:bg-orange-300 group-hover:flex"
                     @click="removeTag(tag)"
@@ -52,6 +62,7 @@
                 </template>
               </TagPill>
               <button
+                v-if="!isShareRoute"
                 type="button"
                 class="relative inline-flex items-center justify-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 shadow-sm transition hover:bg-orange-100"
                 title="Add tag"
@@ -96,25 +107,40 @@
             </div>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div v-if="!isShareRoute" class="inline-flex overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
           <button
             type="button"
-            class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
+            class="inline-flex h-10 items-center justify-center px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-orange-700 active:scale-95"
             @click="editRecipe"
+            title="Edit recipe"
           >
             <PencilSquareIcon class="h-4 w-4" />
-            Edit
           </button>
           <button
             type="button"
-            class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-rose-700 shadow-sm transition hover:border-rose-300 hover:text-rose-800 active:scale-95"
+            class="inline-flex h-10 items-center justify-center border-l border-r border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-orange-700 active:scale-95"
+            title="Share recipe"
+            @click="shareDialogOpen = true"
+          >
+            <ShareIcon class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-10 items-center justify-center px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 hover:text-rose-800 active:scale-95"
             @click="openDeleteDialog"
             title="Delete recipe"
           >
             <TrashIcon class="h-4 w-4" />
-            Delete
           </button>
         </div>
+        <RouterLink
+          v-else-if="sharePermissions.canEdit"
+          :to="{ name: 'recipe-share-edit', params: { token: route.params.token } }"
+          class="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
+          title="Edit shared recipe"
+        >
+          <PencilSquareIcon class="h-4 w-4" />
+        </RouterLink>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[1fr_2fr]">
@@ -181,23 +207,38 @@
         @cancel="cancelDelete"
         @confirm="confirmDelete"
       />
+      <ShareDialog
+        v-if="!isShareRoute && recipe"
+        :open="shareDialogOpen"
+        :recipe-id="recipe.id"
+        @close="shareDialogOpen = false"
+      />
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline';
+import { PencilSquareIcon, PlusIcon, ShareIcon, TrashIcon } from '@heroicons/vue/24/outline';
 import TagPill from '../components/TagPill.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import ShareDialog from '../components/ShareDialog.vue';
 import { useRecipeStore } from '../stores/recipeStore';
 
 const store = useRecipeStore();
 const route = useRoute();
 const router = useRouter();
 
-const recipe = computed(() => store.getRecipeById(route.params.id));
+const shareDialogOpen = ref(false);
+const sharedRecipe = ref(null);
+const sharePermissions = ref({ canEdit: false, type: null });
+const shareError = ref(null);
+const shareLoading = ref(false);
+const isShareRoute = computed(() => route.name === 'recipe-share-view');
+const shareToken = computed(() => route.params.token);
+
+const recipe = computed(() => (isShareRoute.value ? sharedRecipe.value : store.getRecipeById(route.params.id)));
 const tagInput = ref('');
 const showTagInput = ref(false);
 const showDeleteConfirm = ref(false);
@@ -275,6 +316,7 @@ const formatUnit = (unit, quantity) => {
 };
 
 const openDeleteDialog = () => {
+  if (isShareRoute.value) return;
   showDeleteConfirm.value = true;
 };
 
@@ -297,12 +339,16 @@ const confirmDelete = async () => {
 };
 
 const editRecipe = () => {
-  if (recipe.value) {
-    router.push({ name: 'recipe-edit', params: { id: recipe.value.id } });
+  if (!recipe.value) return;
+  if (isShareRoute.value && sharePermissions.value.canEdit) {
+    router.push({ name: 'recipe-share-edit', params: { token: shareToken.value } });
+    return;
   }
+  router.push({ name: 'recipe-edit', params: { id: recipe.value.id } });
 };
 
 const persistTags = async (tags) => {
+  if (isShareRoute.value) return;
   if (!recipe.value) return;
   try {
     await store.saveRecipe({ ...recipe.value, tags });
@@ -333,8 +379,32 @@ const confirmTag = () => {
 };
 
 const removeTag = (tag) => {
+  if (isShareRoute.value) return;
   if (!recipe.value) return;
   const tags = (recipe.value.tags || []).filter((t) => t !== tag);
   persistTags(tags);
 };
+
+const loadSharedRecipe = async () => {
+  if (!shareToken.value || !isShareRoute.value) return;
+  shareLoading.value = true;
+  shareError.value = null;
+  try {
+    const res = await fetch(`/api/share/${shareToken.value}`, { credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to load shared recipe.');
+    sharedRecipe.value = data.recipe;
+    sharePermissions.value = data.permissions || { canEdit: false, type: null };
+  } catch (error) {
+    shareError.value = error.message || 'Unable to load shared recipe.';
+  } finally {
+    shareLoading.value = false;
+  }
+};
+
+watch(
+  () => shareToken.value,
+  () => loadSharedRecipe(),
+  { immediate: true }
+);
 </script>

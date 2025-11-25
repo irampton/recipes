@@ -6,8 +6,10 @@
       <RecipeSidebar
         v-else
         :recipes="recipes"
+        :shared-recipes="sharedRecipes"
         :loading="store.state.loading && !store.state.ready"
         :active-id="activeId"
+        :active-share-token="activeShareToken"
         @go-home="goHome"
       />
       <section class="relative flex min-h-screen flex-col">
@@ -40,6 +42,8 @@ const router = useRouter();
 
 const recipes = computed(() => store.state.recipes);
 const activeId = computed(() => route.params.id);
+const sharedRecipes = computed(() => store.state.sharedRecipes);
+const activeShareToken = computed(() => route.params.token);
 const authRoutes = computed(() => ['login', 'signup']);
 const isAdminRoute = computed(() => Boolean(route.meta?.isAdminPage));
 const showAppShell = computed(() => auth.state.user && !authRoutes.value.includes(route.name));
@@ -49,6 +53,7 @@ watch(
   (user) => {
     if (user) {
       store.loadRecipes();
+      store.loadSharedRecipes();
       settingsStore.loadSettings();
     } else {
       store.reset();
@@ -62,8 +67,9 @@ onMounted(async () => {
   await auth.ensureReady();
   if (auth.state.user) {
     store.loadRecipes();
+    store.loadSharedRecipes();
     settingsStore.loadSettings();
-  } else if (!authRoutes.value.includes(route.name)) {
+  } else if (!authRoutes.value.includes(route.name) && !route.meta?.allowShare) {
     router.replace({ name: 'login', query: { redirect: route.fullPath } });
   }
 });

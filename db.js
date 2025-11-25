@@ -68,6 +68,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_recipes_owner ON recipes(ownerId);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId);
   CREATE INDEX IF NOT EXISTS idx_join_codes_used ON join_codes(usedBy);
+
+  CREATE TABLE IF NOT EXISTS recipe_shares (
+    id TEXT PRIMARY KEY,
+    recipeId TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('public', 'user')),
+    userId TEXT,
+    canEdit INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (recipeId) REFERENCES recipes(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_shares_recipe ON recipe_shares(recipeId);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_public_share_unique ON recipe_shares(recipeId) WHERE type = 'public';
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_user_share_unique ON recipe_shares(recipeId, userId) WHERE type = 'user';
 `);
 
 const joinCodeColumns = db.prepare("PRAGMA table_info('join_codes')").all();
@@ -175,6 +190,12 @@ export const getRecipesForOwner = (ownerId) => {
   return stmt.all(ownerId).map(rowToRecipe);
 };
 
+export const getRecipeByIdAnyOwner = (id) => {
+  const stmt = db.prepare("SELECT * FROM recipes WHERE id = ?");
+  const row = stmt.get(id);
+  return row ? rowToRecipe(row) : null;
+};
+
 export const getRecipeById = (id, ownerId) => {
   const stmt = db.prepare("SELECT * FROM recipes WHERE id = ? AND ownerId = ?");
   const row = stmt.get(id, ownerId);
@@ -245,6 +266,98 @@ export const updateUserRole = (id, role) => {
   const stmt = db.prepare("UPDATE users SET role = ? WHERE id = ?");
   const info = stmt.run(role, id);
   return info.changes > 0;
+};
+
+const randomToken = () => crypto.randomUUID().replace(/-/g, "");
+
+export const getPublicShare = (recipeId) => {
+  const stmt = db.prepare("SELECT * FROM recipe_shares WHERE recipeId = ? AND type = 'public' LIMIT 1");
+  return stmt.get(recipeId) || null;
+};
+
+export const upsertPublicShare = (recipeId) => {
+  const existing = getPublicShare(recipeId);
+  if (existing) return existing;
+  const payload = {
+    id: crypto.randomUUID(),
+    recipeId,
+    token: randomToken(),
+    type: "public",
+    userId: null,
+    canEdit: 0,
+    createdAt: new Date().toISOString(),
+  };
+  const stmt = db.prepare(
+    "INSERT INTO recipe_shares (id, recipeId, token, type, userId, canEdit, createdAt) VALUES (@id, @recipeId, @token, @type, @userId, @canEdit, @createdAt)"
+  );
+  stmt.run(payload);
+  return payload;
+};
+
+export const removePublicShare = (recipeId) => {
+  const stmt = db.prepare("DELETE FROM recipe_shares WHERE recipeId = ? AND type = 'public'");
+  stmt.run(recipeId);
+};
+
+export const upsertUserShare = (recipeId, userId, canEdit = false) => {
+  const existing = db
+    .prepare("SELECT * FROM recipe_shares WHERE recipeId = ? AND userId = ? AND type = 'user'")
+    .get(recipeId, userId);
+  if (existing) {
+    const stmt = db.prepare("UPDATE recipe_shares SET canEdit = ? WHERE id = ?");
+    stmt.run(canEdit ? 1 : 0, existing.id);
+    return { ...existing, canEdit: canEdit ? 1 : 0 };
+  }
+  const payload = {
+    id: crypto.randomUUID(),
+    recipeId,
+    token: randomToken(),
+    type: "user",
+    userId,
+    canEdit: canEdit ? 1 : 0,
+    createdAt: new Date().toISOString(),
+  };
+  const stmt = db.prepare(
+    "INSERT INTO recipe_shares (id, recipeId, token, type, userId, canEdit, createdAt) VALUES (@id, @recipeId, @token, @type, @userId, @canEdit, @createdAt)"
+  );
+  stmt.run(payload);
+  return payload;
+};
+
+export const deleteUserShare = (recipeId, userId) => {
+  const stmt = db.prepare("DELETE FROM recipe_shares WHERE recipeId = ? AND userId = ? AND type = 'user'");
+  stmt.run(recipeId, userId);
+};
+
+export const listSharesForRecipe = (recipeId) => {
+  const stmt = db.prepare("SELECT * FROM recipe_shares WHERE recipeId = ? ORDER BY createdAt DESC");
+  return stmt.all(recipeId) || [];
+};
+
+export const getShareByToken = (token) => {
+  const stmt = db.prepare("SELECT * FROM recipe_shares WHERE token = ?");
+  return stmt.get(token) || null;
+};
+
+export const listSharedRecipesForUser = (userId) => {
+  if (!userId) return [];
+  const stmt = db.prepare(`
+    SELECT rs.id as shareId, rs.token, rs.canEdit, rs.createdAt as sharedAt,
+           r.*, u.username as ownerUsername
+    FROM recipe_shares rs
+    JOIN recipes r ON r.id = rs.recipeId
+    JOIN users u ON u.id = r.ownerId
+    WHERE rs.type = 'user' AND rs.userId = ?
+    ORDER BY r.title COLLATE NOCASE
+  `);
+  return stmt.all(userId).map((row) => ({
+    ...rowToRecipe(row),
+    shareId: row.shareId,
+    shareToken: row.token,
+    canEdit: Boolean(row.canEdit),
+    sharedAt: row.sharedAt,
+    ownerUsername: row.ownerUsername || "",
+  }));
 };
 
 export const countOwners = () => {

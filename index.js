@@ -121,6 +121,24 @@ app.post("/api/login", auth.loginHandler);
 app.post("/api/logout", auth.logoutHandler);
 app.get("/api/me", auth.meHandler);
 
+app.get("/api/users/search", auth.requireAuth, (req, res) => {
+  const q = (req.query.q || "").toString().trim().toLowerCase();
+  if (!q) {
+    res.json({ success: true, users: [] });
+    return;
+  }
+  const all = db.getUsers();
+  const matches = all
+    .filter((u) => u.username.toLowerCase().includes(q))
+    .slice(0, 10);
+  res.json({ success: true, users: matches });
+});
+
+app.get("/api/shared-recipes", auth.requireAuth, (req, res) => {
+  const recipes = db.listSharedRecipesForUser(req.user.id);
+  res.json({ success: true, recipes });
+});
+
 app.get("/api/users", auth.requireAdmin, (req, res) => {
   res.json({ success: true, users: db.getUsers() });
 });
@@ -161,6 +179,130 @@ app.delete("/api/users/:id", auth.requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+app.get("/api/recipes/:id/shares", auth.requireAuth, (req, res) => {
+  const { id } = req.params;
+  const recipe = db.getRecipeById(id, req.user.id);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  const shares = db.listSharesForRecipe(id);
+  const userShares = shares.filter((s) => s.type === "user");
+  const withNames = userShares.map((s) => {
+    const user = db.findUserById(s.userId);
+    return { ...s, username: user?.username || "Unknown" };
+  });
+  const publicShare = shares.find((s) => s.type === "public") || null;
+  res.json({ success: true, shares: { publicShare, userShares: withNames } });
+});
+
+app.post("/api/recipes/:id/share/public", auth.requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { enabled } = req.body || {};
+  const recipe = db.getRecipeById(id, req.user.id);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  if (enabled) {
+    const share = db.upsertPublicShare(id);
+    db.saveRecipe({ ...recipe, isPublic: true });
+    res.json({ success: true, share });
+  } else {
+    db.removePublicShare(id);
+    db.saveRecipe({ ...recipe, isPublic: false });
+    res.json({ success: true, share: null });
+  }
+});
+
+app.post("/api/recipes/:id/share/user", auth.requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { userId, canEdit } = req.body || {};
+  const recipe = db.getRecipeById(id, req.user.id);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  if (!userId) {
+    res.status(400).json({ success: false, error: "Missing user id." });
+    return;
+  }
+  const targetUser = db.findUserById(userId);
+  if (!targetUser) {
+    res.status(404).json({ success: false, error: "User not found." });
+    return;
+  }
+  const share = db.upsertUserShare(id, userId, Boolean(canEdit));
+  res.json({ success: true, share: { ...share, username: targetUser.username } });
+});
+
+app.delete("/api/recipes/:id/share/user/:userId", auth.requireAuth, (req, res) => {
+  const { id, userId } = req.params;
+  const recipe = db.getRecipeById(id, req.user.id);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  db.deleteUserShare(id, userId);
+  res.json({ success: true });
+});
+
+app.get("/api/share/:token", async (req, res) => {
+  const { token } = req.params;
+  const share = db.getShareByToken(token);
+  if (!share) {
+    res.status(404).json({ success: false, error: "Share not found." });
+    return;
+  }
+  const recipe = db.getRecipeByIdAnyOwner(share.recipeId);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  if (share.type === "user" && (!req.user || req.user.id !== share.userId) && (!req.user || req.user.id !== recipe.ownerId)) {
+    res.status(403).json({ success: false, error: "Unauthorized to view this recipe." });
+    return;
+  }
+  res.json({
+    success: true,
+    recipe: { ...recipe, isPublic: share.type === "public" || recipe.isPublic },
+    permissions: {
+      canEdit:
+        (req.user && req.user.id === recipe.ownerId) ||
+        (Boolean(share.canEdit) && (!share.userId || (req.user && req.user.id === share.userId))),
+      type: share.type,
+    },
+  });
+});
+
+app.put("/api/share/:token", async (req, res) => {
+  const { token } = req.params;
+  const share = db.getShareByToken(token);
+  if (!share) {
+    res.status(404).json({ success: false, error: "Share not found." });
+    return;
+  }
+  const recipe = db.getRecipeByIdAnyOwner(share.recipeId);
+  if (!recipe) {
+    res.status(404).json({ success: false, error: "Recipe not found." });
+    return;
+  }
+  const isOwner = req.user && req.user.id === recipe.ownerId;
+  const canEdit = isOwner || (Boolean(share.canEdit) && (share.userId ? req.user && req.user.id === share.userId : true));
+  if (!canEdit) {
+    res.status(403).json({ success: false, error: "You cannot edit this recipe." });
+    return;
+  }
+  const normalized = normalizeRecipe({
+    ...recipe,
+    ...req.body,
+    id: recipe.id,
+    ownerId: recipe.ownerId,
+    isPublic: recipe.isPublic,
+  });
+  const saved = db.saveRecipe(normalized);
+  res.json({ success: true, recipe: saved });
+});
 app.patch("/api/users/:id/role", auth.requireOwner, (req, res) => {
   const targetId = req.params.id;
   const { role } = req.body || {};

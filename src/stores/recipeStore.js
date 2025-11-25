@@ -3,6 +3,7 @@ import socket from '../services/socket';
 
 const state = reactive({
   recipes: [],
+  sharedRecipes: [],
   loading: false,
   error: null,
   ready: false,
@@ -46,6 +47,18 @@ const loadRecipes = () => {
   });
 };
 
+const loadSharedRecipes = async () => {
+  try {
+    const res = await fetch('/api/shared-recipes', { credentials: 'include' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      state.sharedRecipes = sortByTitle(data.recipes || []);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 const saveRecipe = (recipe) =>
   new Promise((resolve, reject) => {
     state.error = null;
@@ -76,15 +89,19 @@ const deleteRecipe = (id) =>
   });
 
 const getRecipeById = (id) => state.recipes.find((recipe) => recipe.id === id);
+const getSharedRecipeById = (id) => state.sharedRecipes.find((recipe) => recipe.id === id);
 
 export const useRecipeStore = () => ({
   state,
   loadRecipes,
+  loadSharedRecipes,
   saveRecipe,
   deleteRecipe,
   getRecipeById,
+  getSharedRecipeById,
   reset: () => {
     state.recipes = [];
+    state.sharedRecipes = [];
     state.ready = false;
     state.error = null;
   },

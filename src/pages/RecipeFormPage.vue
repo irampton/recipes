@@ -17,7 +17,14 @@
             Import via LLM
           </RouterLink>
           <RouterLink
-            v-if="isEditing && currentRecipe"
+            v-if="isShareEdit && shareToken"
+            :to="{ name: 'recipe-share-view', params: { token: shareToken } }"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-emerald-200 hover:text-emerald-700"
+          >
+            Cancel
+          </RouterLink>
+          <RouterLink
+            v-else-if="isEditing && currentRecipe"
             :to="{ name: 'recipe-detail', params: { id: currentRecipe.id } }"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-emerald-200 hover:text-emerald-700"
           >
@@ -43,6 +50,9 @@
       </div>
       <div v-if="store.state.error" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
         {{ store.state.error }}
+      </div>
+      <div v-if="shareError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {{ shareError }}
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <label class="flex flex-col gap-2">
@@ -244,7 +254,7 @@
       <button
         type="button"
         class="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-        :disabled="isSaving"
+        :disabled="isSaving || (isShareEdit && !sharedRecipe)"
         @click="save"
       >
         <CheckIcon class="h-4 w-4" />
@@ -265,6 +275,8 @@ const store = useRecipeStore();
 const settingsStore = useSettingsStore();
 const route = useRoute();
 const router = useRouter();
+const shareToken = computed(() => route.params.token);
+const isShareEdit = computed(() => route.name === 'recipe-share-edit');
 
 const today = new Date().toISOString().slice(0, 10);
 const makeId = () =>
@@ -290,9 +302,11 @@ const form = reactive({
 
 const tagInput = ref('');
 const isSaving = ref(false);
+const sharedRecipe = ref(null);
+const shareError = ref(null);
 
-const currentRecipe = computed(() => store.getRecipeById(route.params.id));
-const isEditing = computed(() => Boolean(route.params.id));
+const currentRecipe = computed(() => (isShareEdit.value ? sharedRecipe.value : store.getRecipeById(route.params.id)));
+const isEditing = computed(() => Boolean(route.params.id) || isShareEdit.value);
 const units = ['cup', 'tbsp', 'tsp', 'g', 'kg', 'oz', 'ml', 'l', 'piece', 'pinch'];
 const llmAvailable = computed(() => settingsStore.isLlmEnabled());
 
@@ -355,6 +369,26 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => shareToken.value,
+  () => loadSharedRecipe(),
+  { immediate: true }
+);
+
+const loadSharedRecipe = async () => {
+  if (!isShareEdit.value || !shareToken.value) return;
+  shareError.value = null;
+  try {
+    const res = await fetch(`/api/share/${shareToken.value}`, { credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to load shared recipe.');
+    sharedRecipe.value = data.recipe;
+    applyDraft(data.recipe, { replaceExisting: true });
+  } catch (err) {
+    shareError.value = err.message || 'Unable to load shared recipe.';
+  }
+};
+
 const addIngredient = () => {
   form.ingredients.push(blankIngredient());
 };
@@ -408,11 +442,29 @@ const buildPayload = () => {
 const save = async () => {
   try {
     isSaving.value = true;
+    if (isShareEdit.value) {
+      shareError.value = null;
+    }
     const payload = buildPayload();
-    const saved = await store.saveRecipe(payload);
-    router.push({ name: 'recipe-detail', params: { id: saved.id } });
+    if (isShareEdit.value && shareToken.value) {
+      const res = await fetch(`/api/share/${shareToken.value}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to save recipe.');
+      router.push({ name: 'recipe-share-view', params: { token: shareToken.value } });
+    } else {
+      const saved = await store.saveRecipe(payload);
+      router.push({ name: 'recipe-detail', params: { id: saved.id } });
+    }
   } catch (error) {
     console.error(error);
+    if (isShareEdit.value) {
+      shareError.value = error.message || 'Unable to save recipe.';
+    }
   } finally {
     isSaving.value = false;
   }
@@ -420,5 +472,6 @@ const save = async () => {
 
 onMounted(() => {
   settingsStore.loadSettings();
+  loadSharedRecipe();
 });
 </script>

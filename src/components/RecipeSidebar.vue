@@ -24,24 +24,49 @@
       <div v-else-if="!totalCount" class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
         No recipes yet. Tap the + to create one.
       </div>
-      <div
-        v-else-if="!filteredRecipes.length"
-        class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
-      >
+      <div v-else-if="!hasAnyResults" class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
         No recipes match “{{ searchQuery }}”.
       </div>
 
-      <ul v-else class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm">
-        <li v-for="recipe in filteredRecipes" :key="recipe.id">
-          <RouterLink
-            :to="{ name: 'recipe-detail', params: { id: recipe.id } }"
-            class="flex items-center gap-2 px-3 py-3 text-sm transition hover:bg-orange-50"
-            :class="{ 'bg-orange-50 text-orange-800 font-semibold': activeId === recipe.id }"
-          >
-            <span class="truncate whitespace-nowrap">{{ recipe.title }}</span>
-          </RouterLink>
-        </li>
-      </ul>
+      <div v-else class="space-y-3">
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span>Your recipes</span>
+            <span class="text-slate-400">{{ filteredOwned.length }}</span>
+          </div>
+          <ul class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <li v-for="recipe in filteredOwned" :key="recipe.id">
+              <RouterLink
+                :to="{ name: 'recipe-detail', params: { id: recipe.id } }"
+                class="flex items-center gap-2 px-3 py-3 text-sm transition hover:bg-orange-50"
+                :class="{ 'bg-orange-50 text-orange-800 font-semibold': activeId === recipe.id }"
+              >
+                <span class="truncate whitespace-nowrap">{{ recipe.title }}</span>
+              </RouterLink>
+            </li>
+            <li v-if="!filteredOwned.length" class="px-3 py-2 text-xs text-slate-500">No matches.</li>
+          </ul>
+        </div>
+
+        <div v-if="filteredShared.length" class="space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span>Shared with you</span>
+            <span class="text-slate-400">{{ filteredShared.length }}</span>
+          </div>
+          <ul class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <li v-for="recipe in filteredShared" :key="recipe.id">
+              <RouterLink
+                :to="{ name: 'recipe-share-view', params: { token: recipe.shareToken } }"
+                class="flex items-center gap-2 px-3 py-3 text-sm transition hover:bg-orange-50"
+                :class="{ 'bg-orange-50 text-orange-800 font-semibold': activeShareToken === recipe.shareToken }"
+              >
+                <span class="truncate whitespace-nowrap">{{ recipe.title }}</span>
+                <span class="truncate text-xs text-slate-400">• {{ recipe.ownerUsername || 'Shared' }}</span>
+              </RouterLink>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </aside>
 </template>
@@ -56,11 +81,19 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  sharedRecipes: {
+    type: Array,
+    default: () => [],
+  },
   loading: {
     type: Boolean,
     default: false,
   },
   activeId: {
+    type: String,
+    default: null,
+  },
+  activeShareToken: {
     type: String,
     default: null,
   },
@@ -70,13 +103,14 @@ defineEmits(['go-home']);
 
 const searchQuery = ref('');
 
-const preparedRecipes = computed(() =>
-  props.recipes.map((recipe) => {
+const mapWithHaystack = (list) =>
+  list.map((recipe) => {
     const parts = [
       recipe.title,
       recipe.description,
       recipe.author,
       recipe.notes,
+      recipe.ownerUsername,
       ...(recipe.tags || []),
       ...(recipe.ingredients || []).map((item) => `${item.name} ${item.quantity} ${item.unit}`),
       ...(recipe.steps || []),
@@ -86,15 +120,25 @@ const preparedRecipes = computed(() =>
       .toLowerCase();
 
     return { ...recipe, _haystack: parts };
-  })
-);
+  });
 
-const filteredRecipes = computed(() => {
+const preparedOwned = computed(() => mapWithHaystack(props.recipes));
+const preparedShared = computed(() => mapWithHaystack(props.sharedRecipes));
+
+const filteredOwned = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   if (!query) return props.recipes;
   const terms = query.split(/\s+/).filter(Boolean);
-  return preparedRecipes.value.filter((recipe) => terms.every((term) => recipe._haystack.includes(term)));
+  return preparedOwned.value.filter((recipe) => terms.every((term) => recipe._haystack.includes(term)));
 });
 
-const totalCount = computed(() => props.recipes.length);
+const filteredShared = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return props.sharedRecipes;
+  const terms = query.split(/\s+/).filter(Boolean);
+  return preparedShared.value.filter((recipe) => terms.every((term) => recipe._haystack.includes(term)));
+});
+
+const totalCount = computed(() => props.recipes.length + props.sharedRecipes.length);
+const hasAnyResults = computed(() => filteredOwned.value.length + filteredShared.value.length > 0);
 </script>

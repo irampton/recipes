@@ -17,6 +17,8 @@ const router = createRouter({
     { path: '/recipes/import', name: 'recipe-import', component: RecipeImportPage, meta: { requiresAuth: true } },
     { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetailPage, props: true, meta: { requiresAuth: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeFormPage, props: true, meta: { requiresAuth: true } },
+    { path: '/share/:token', name: 'recipe-share-view', component: RecipeDetailPage, props: true, meta: { allowShare: true } },
+    { path: '/share/:token/edit', name: 'recipe-share-edit', component: RecipeFormPage, props: true, meta: { allowShare: true } },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/signup', name: 'signup', component: SignupPage },
     { path: '/admin', redirect: { name: 'admin-users' } },
@@ -36,29 +38,6 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0, behavior: 'smooth' };
   },
-});
-
-router.beforeEach(async (to, from, next) => {
-  const auth = useAuthStore();
-  await auth.ensureReady();
-
-  const isAuthRoute = to.name === 'login' || to.name === 'signup';
-  const requiresAuth = to.meta.requiresAuth;
-  const requiresAdmin = to.meta.requiresAdmin;
-
-  if (!auth.state.user && requiresAuth) {
-    return next({ name: 'login', query: { redirect: to.fullPath } });
-  }
-
-  if (auth.state.user && isAuthRoute) {
-    return next({ name: 'home' });
-  }
-
-  if (requiresAdmin && !['owner', 'admin'].includes(auth.state.user?.role)) {
-    return next({ name: 'home' });
-  }
-
-  next();
 });
 
 export default router;
