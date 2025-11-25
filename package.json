@@ -16,6 +16,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.4.6",
     "express": "^5.1.0",
+    "node-tesseract-ocr": "^2.2.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "vue": "^3.5.22",

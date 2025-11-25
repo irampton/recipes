@@ -1,8 +1,9 @@
-export const importRecipeFromText = async (text) => {
+export const importRecipeFromText = async (input) => {
+  const payload = typeof input === "string" ? { text: input } : input || {};
   const response = await fetch("/api/llm-import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(payload),
   });
 
   const data = await response.json().catch(() => null);

@@ -2,9 +2,12 @@ import express from "express";
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { Server } from "socket.io";
 import { fileURLToPath } from "node:url";
+import tesseract from "node-tesseract-ocr";
 import { buildRecipeFromText } from "./LLM.js";
 import * as db from "./db.js";
 import * as auth from "./auth.js";
@@ -20,12 +23,72 @@ const io = new Server(server, {
   cors: { origin: true },
 });
 
+const tesseractConfig = { lang: "eng", oem: 1, psm: 3 };
+
+const diagnoseTesseract = () => {
+  try {
+    const result = spawnSync("tesseract", ["--version"], { encoding: "utf8" });
+    if (result.error) {
+      return `tesseract spawn error: ${result.error.message}`;
+    }
+    const out = result.stdout?.trim() || "no tesseract stdout";
+    const err = result.stderr?.trim();
+    if (err) console.error("[llm] tesseract stderr:", err);
+    return out;
+  } catch (err) {
+    return `tesseract diagnostic failed: ${err?.message || err}`;
+  }
+};
+
+const parseBase64Image = (value) => {
+  if (!value || typeof value !== "string") return null;
+  const match = value.match(/^data:(.+);base64,(.+)$/);
+  if (match) {
+    return { mime: match[1], buffer: Buffer.from(match[2], "base64") };
+  }
+  try {
+    return { mime: "application/octet-stream", buffer: Buffer.from(value, "base64") };
+  } catch (err) {
+    return null;
+  }
+};
+
+const extractTextFromImage = async (imageBase64) => {
+  const parsed = parseBase64Image(imageBase64);
+  if (!parsed) return "";
+
+  const ext = parsed.mime?.includes("png")
+    ? ".png"
+    : parsed.mime?.includes("jpeg") || parsed.mime?.includes("jpg")
+      ? ".jpg"
+      : parsed.mime?.includes("webp")
+        ? ".webp"
+        : ".img";
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lembas-ocr-"));
+  const tmpPath = path.join(tmpDir, `upload${ext}`);
+
+  fs.writeFileSync(tmpPath, parsed.buffer);
+
+  try {
+    const raw = await tesseract.recognize(tmpPath, tesseractConfig);
+    return (raw || "").toString().trim();
+  } catch (err) {
+    console.error("[llm] tesseract failed:", err?.message || err);
+    if (err?.stack) console.error(err.stack);
+    console.error("[llm] tesseract diagnostic:", diagnoseTesseract());
+    throw err;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
 const emitFriendUpdate = (userId) => {
   if (!userId) return;
   io.to(`user:${userId}`).emit("friends:updated");
 };
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(auth.attachSession);
 
 const distDir = path.resolve(__dirname, "dist");
@@ -86,9 +149,11 @@ app.use(express.static(distDir));
 bootstrapLlmSettingsFromEnv();
 
 app.post("/api/llm-import", auth.requireAuth, async (req, res) => {
-  const { text } = req.body || {};
-  if (!text || !text.trim()) {
-    res.status(400).json({ success: false, error: "Please provide some text to import." });
+  const { text, imageBase64 } = req.body || {};
+  const incomingText = (text || "").toString();
+
+  if (!incomingText.trim() && !imageBase64) {
+    res.status(400).json({ success: false, error: "Please provide recipe text or an image." });
     return;
   }
 
@@ -98,8 +163,38 @@ app.post("/api/llm-import", auth.requireAuth, async (req, res) => {
     return;
   }
 
+  let combinedText = incomingText.trim();
+
+  if (imageBase64) {
+    try {
+      const ocrText = await extractTextFromImage(imageBase64);
+      console.log("OCR", ocrText);
+      if (ocrText) {
+        combinedText = [combinedText, ocrText].filter(Boolean).join("\n\n");
+      } else if (!combinedText) {
+        res.status(400).json({ success: false, error: "We could not read any text from that image." });
+        return;
+      }
+    } catch (error) {
+      console.error("[llm] tesseract failed:", error?.message || error);
+      if (error?.stack) console.error(error.stack);
+      if (error?.stdout) console.error("[llm] tesseract stdout:", error.stdout.toString());
+      if (error?.stderr) console.error("[llm] tesseract stderr:", error.stderr.toString());
+      res.status(500).json({
+        success: false,
+        error: "Unable to read text from the image right now (OCR backend). Check server logs for details.",
+      });
+      return;
+    }
+  }
+
+  if (!combinedText) {
+    res.status(400).json({ success: false, error: "Please provide recipe text or an image." });
+    return;
+  }
+
   try {
-    const recipe = await buildRecipeFromText(text, { endpoint: llmSettings.endpoint });
+    const recipe = await buildRecipeFromText(combinedText, { endpoint: llmSettings.endpoint });
     res.json({ success: true, data: recipe });
   } catch (error) {
     console.error("[llm] import failed:", error);
