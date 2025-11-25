@@ -3,21 +3,36 @@
     <div class="flex flex-col gap-4 px-4 py-4">
       <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
         <span>Recipes</span>
-        <span class="text-slate-400">{{ recipes.length }}</span>
+        <span class="text-slate-400">{{ totalCount }}</span>
       </div>
+
+      <label class="relative">
+        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          inputmode="search"
+          class="w-full rounded-lg border border-slate-200 bg-white px-9 py-2 text-sm text-slate-900 shadow-sm focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+          placeholder="Search recipes..."
+          aria-label="Search recipes"
+        />
+      </label>
 
       <div v-if="loading" class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
         Loading recipes...
       </div>
-      <div
-        v-else-if="!recipes.length"
-        class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
-      >
+      <div v-else-if="!totalCount" class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
         No recipes yet. Tap the + to create one.
       </div>
+      <div
+        v-else-if="!filteredRecipes.length"
+        class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+      >
+        No recipes match “{{ searchQuery }}”.
+      </div>
 
-      <ul class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm">
-        <li v-for="recipe in recipes" :key="recipe.id">
+      <ul v-else class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm">
+        <li v-for="recipe in filteredRecipes" :key="recipe.id">
           <RouterLink
             :to="{ name: 'recipe-detail', params: { id: recipe.id } }"
             class="flex items-center gap-2 px-3 py-3 text-sm transition hover:bg-orange-50"
@@ -32,9 +47,11 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import { MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
 
-defineProps({
+const props = defineProps({
   recipes: {
     type: Array,
     default: () => [],
@@ -50,4 +67,34 @@ defineProps({
 });
 
 defineEmits(['go-home']);
+
+const searchQuery = ref('');
+
+const preparedRecipes = computed(() =>
+  props.recipes.map((recipe) => {
+    const parts = [
+      recipe.title,
+      recipe.description,
+      recipe.author,
+      recipe.notes,
+      ...(recipe.tags || []),
+      ...(recipe.ingredients || []).map((item) => `${item.name} ${item.quantity} ${item.unit}`),
+      ...(recipe.steps || []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return { ...recipe, _haystack: parts };
+  })
+);
+
+const filteredRecipes = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return props.recipes;
+  const terms = query.split(/\s+/).filter(Boolean);
+  return preparedRecipes.value.filter((recipe) => terms.every((term) => recipe._haystack.includes(term)));
+});
+
+const totalCount = computed(() => props.recipes.length);
 </script>
