@@ -60,6 +60,8 @@ db.exec(`
     ownerId TEXT NOT NULL,
     isPublic INTEGER DEFAULT 0,
     notes TEXT DEFAULT '',
+    servingsQuantity TEXT DEFAULT '',
+    servingsUnit TEXT DEFAULT '',
     FOREIGN KEY (ownerId) REFERENCES users(id)
   );
 
@@ -92,6 +94,16 @@ const parseJson = (value, fallback) => {
     return fallback;
   }
 };
+
+const recipeColumns = db.prepare("PRAGMA table_info('recipes')").all();
+const hasServingsQuantity = recipeColumns.some((col) => col.name === "servingsQuantity");
+const hasServingsUnit = recipeColumns.some((col) => col.name === "servingsUnit");
+if (!hasServingsQuantity) {
+  db.exec("ALTER TABLE recipes ADD COLUMN servingsQuantity TEXT DEFAULT '';");
+}
+if (!hasServingsUnit) {
+  db.exec("ALTER TABLE recipes ADD COLUMN servingsUnit TEXT DEFAULT '';");
+}
 
 export const getSetting = (key, fallback = null) => {
   if (!key) return fallback;
@@ -137,6 +149,8 @@ const rowToRecipe = (row) => ({
   ownerId: row.ownerId || "",
   isPublic: Boolean(row.isPublic),
   notes: row.notes || "",
+  servingsQuantity: row.servingsQuantity || "",
+  servingsUnit: row.servingsUnit || "",
 });
 
 const serializeRecipe = (recipe) => ({
@@ -151,6 +165,8 @@ const serializeRecipe = (recipe) => ({
   ownerId: recipe.ownerId ?? "",
   isPublic: recipe.isPublic ? 1 : 0,
   notes: recipe.notes ?? "",
+  servingsQuantity: recipe.servingsQuantity ?? "",
+  servingsUnit: recipe.servingsUnit ?? "",
 });
 
 export const getRecipesForOwner = (ownerId) => {
@@ -167,8 +183,8 @@ export const getRecipeById = (id, ownerId) => {
 
 export const saveRecipe = (recipe) => {
   const upsertStmt = db.prepare(`
-    INSERT INTO recipes (id, title, description, author, createdAt, tags, ingredients, steps, ownerId, isPublic, notes)
-    VALUES (@id, @title, @description, @author, @createdAt, @tags, @ingredients, @steps, @ownerId, @isPublic, @notes)
+    INSERT INTO recipes (id, title, description, author, createdAt, tags, ingredients, steps, ownerId, isPublic, notes, servingsQuantity, servingsUnit)
+    VALUES (@id, @title, @description, @author, @createdAt, @tags, @ingredients, @steps, @ownerId, @isPublic, @notes, @servingsQuantity, @servingsUnit)
     ON CONFLICT(id) DO UPDATE SET
       title=excluded.title,
       description=excluded.description,
@@ -179,7 +195,9 @@ export const saveRecipe = (recipe) => {
       steps=excluded.steps,
       ownerId=excluded.ownerId,
       isPublic=excluded.isPublic,
-      notes=excluded.notes
+      notes=excluded.notes,
+      servingsQuantity=excluded.servingsQuantity,
+      servingsUnit=excluded.servingsUnit
   `);
   upsertStmt.run(serializeRecipe(recipe));
   return getRecipeById(recipe.id, recipe.ownerId);

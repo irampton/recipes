@@ -35,11 +35,8 @@
     <div v-else class="space-y-6">
       <div class="flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-start md:justify-between">
         <div class="space-y-4">
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600">Recipe</span>
-            <span class="text-xs text-slate-500">{{ metaLine }}</span>
-          </div>
           <h1 class="text-3xl font-bold text-slate-900">{{ recipe.title }}</h1>
+          <p v-if="metaLine" class="text-sm text-slate-600">{{ metaLine }}</p>
           <p class="text-slate-600" v-if="recipe.description">{{ recipe.description }}</p>
           <div class="space-y-2">
             <div class="flex flex-wrap items-center gap-2">
@@ -176,6 +173,16 @@
         </div>
       </div>
 
+      <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-900">Notes</h2>
+        </div>
+        <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+          <p v-if="recipe.notes" class="whitespace-pre-line leading-relaxed">{{ recipe.notes }}</p>
+          <p v-else class="text-slate-500">No notes added yet.</p>
+        </div>
+      </div>
+
       <ConfirmDialog
         :open="showDeleteConfirm"
         title="Delete this recipe?"
@@ -205,15 +212,25 @@ const showTagInput = ref(false);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
 
+const servingSize = computed(() => {
+  const quantity = recipe.value?.servingsQuantity?.toString?.().trim() || '';
+  const unit = recipe.value?.servingsUnit?.toString?.().trim() || '';
+  const combined = [quantity, unit].filter(Boolean).join(' ').trim();
+  return combined || '';
+});
+
 const formattedDate = computed(() => {
-  if (!recipe.value?.createdAt) return 'Not set';
+  if (!recipe.value?.createdAt) return '';
   const date = new Date(recipe.value.createdAt);
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 });
 
 const metaLine = computed(() => {
-  const author = recipe.value?.author || 'Unknown author';
-  return `${author} • ${formattedDate.value}`;
+  const parts = [];
+  if (recipe.value?.author) parts.push(recipe.value.author);
+  if (formattedDate.value) parts.push(formattedDate.value);
+  if (servingSize.value) parts.push(`Serves ${servingSize.value}`);
+  return parts.join(' - ');
 });
 
 const abbreviations = {

@@ -28,6 +28,12 @@ const indexHtmlPath = path.join(distDir, "index.html");
 
 const normalizeRecipe = (incoming) => {
   const now = new Date().toISOString();
+  const servings = incoming.servings || {};
+  const servingQuantity =
+    incoming.servingsQuantity?.trim?.() ||
+    servings.quantity?.toString?.().trim?.() ||
+    (typeof servings === "string" ? servings.trim() : "");
+  const servingUnit = incoming.servingsUnit?.trim?.() || servings.unit?.toString?.().trim?.() || "";
   return {
     id: incoming.id || crypto.randomUUID(),
     title: incoming.title?.trim() || "Untitled Recipe",
@@ -47,6 +53,8 @@ const normalizeRecipe = (incoming) => {
     ownerId: incoming.ownerId?.trim?.() || incoming.ownerID?.trim?.() || "",
     isPublic: Boolean(incoming.isPublic),
     notes: incoming.notes?.trim?.() || "",
+    servingsQuantity: servingQuantity,
+    servingsUnit: servingUnit,
   };
 };
 

@@ -9,7 +9,10 @@ From the user's pasted text, return ONLY valid JSON with this shape:
   "author": string,
   "tags": string[],
   "ingredients": [{ "name": string, "quantity": string, "unit": string }],
-  "steps": string[]
+  "steps": string[],
+  "notes": string,
+  "servingsQuantity": string,
+  "servingsUnit": string
 }
 Rules:
 - Include ALL ingredients you can find; do not omit items. If many exist, include them all.
@@ -20,6 +23,8 @@ Rules:
 - Provide 3-4 concise tags focused on meal type and main ingredients (e.g., "dinner", "dessert", "pumpkin", "chicken", "pasta"); omit dietary labels unless given.
 - Units must be chosen ONLY from this list: ["cup","tbsp","tsp","g","kg","oz","ml","l","piece","pinch"]. Convert close variants (cups, tablespoons, tsp., etc.) to the closest allowed unit. If you cannot map it, leave unit as an empty string.
 - Express customary measurements as simple fractions where applicable (e.g., 1/2, 1/3, 1/4, 3/4).
+- Put any additional cook's guidance, substitutions, or reminders into "notes".
+- If a serving size is present, return the numeric/text value in "servingsQuantity" (e.g., "4", "4-6") and the accompanying text in "servingsUnit" (e.g., "servings", "people", "cups"). If you cannot find one, leave them as empty strings.
 - Use empty strings/arrays when something is missing.
 - Do NOT add extra fields beyond the JSON shape. Respond with JSON only, no prose.`;
 
@@ -142,6 +147,7 @@ const normalizeRecipe = (payload) => {
   const data = payload || {};
   const steps = normalizeSteps(data.steps);
   const ingredients = normalizeIngredients(data.ingredients);
+  const servings = data.servings || {};
   const tags = arrayFrom(data.tags)
     .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
     .filter(Boolean)
@@ -154,6 +160,12 @@ const normalizeRecipe = (payload) => {
     tags,
     ingredients,
     steps: steps.map((step) => step.trim()).filter(Boolean),
+    notes: data.notes?.toString?.().trim() || "",
+    servingsQuantity:
+      data.servingsQuantity?.toString?.().trim() ||
+      servings?.quantity?.toString?.().trim() ||
+      (typeof servings === "string" ? servings.trim() : ""),
+    servingsUnit: data.servingsUnit?.toString?.().trim() || servings?.unit?.toString?.().trim() || "",
   };
 };
 

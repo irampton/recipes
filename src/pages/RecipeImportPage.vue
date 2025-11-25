@@ -31,7 +31,7 @@
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-lg font-semibold text-slate-900">Paste recipe content</h2>
-          <p class="text-sm text-slate-600">We will ask for structured JSON with title, tags, ingredients, and steps.</p>
+          <p class="text-sm text-slate-600">We will ask for structured JSON with title, tags, ingredients, steps, serving size, and notes.</p>
         </div>
         <span v-if="loading" class="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
           <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -60,13 +60,14 @@
             <li>Extract title, description, author/source, tags</li>
             <li>Build ingredients with quantity + unit where possible</li>
             <li>Return ordered steps as short instructions</li>
+            <li>Collect serving size (quantity + unit text) and any cook's notes</li>
           </ul>
         </div>
         <div class="space-y-1">
           <p class="text-xs font-semibold uppercase tracking-wide text-orange-700">Tips</p>
           <ul class="list-disc space-y-1 pl-5">
             <li>Include the full ingredients and directions text</li>
-            <li>Add any personal notes — they will stay in description</li>
+            <li>Add any personal notes — they will populate notes</li>
             <li>Nothing is saved until you review and click Save</li>
           </ul>
         </div>

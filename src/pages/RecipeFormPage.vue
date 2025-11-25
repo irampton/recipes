@@ -212,6 +212,45 @@
       </button>
     </div>
 
+    <div class="grid gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100 md:grid-cols-[1fr_1fr]">
+      <div class="space-y-2">
+        <h2 class="text-lg font-semibold text-slate-900">Serving size</h2>
+        <p class="text-sm text-slate-600">Optional details for how much this recipe yields.</p>
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="flex flex-col gap-1 text-sm font-semibold text-slate-800">
+            Quantity
+            <input
+              v-model="form.servingsQuantity"
+              type="text"
+              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 shadow-sm focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              placeholder="4"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm font-semibold text-slate-800">
+            Unit / label
+            <input
+              v-model="form.servingsUnit"
+              type="text"
+              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 shadow-sm focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              placeholder="servings, slices, people..."
+            />
+          </label>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-900">Notes</h2>
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Optional</span>
+        </div>
+        <textarea
+          v-model="form.notes"
+          rows="5"
+          class="h-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 shadow-sm focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+          placeholder="Finishing tips, substitutions, storage notes..."
+        ></textarea>
+      </div>
+    </div>
+
     <div class="flex flex-col items-stretch gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-center md:justify-between">
       <span class="text-sm text-slate-600">All set? Save your recipe when you're ready.</span>
       <button
@@ -257,6 +296,9 @@ const form = reactive({
   createdAt: today,
   ingredients: [blankIngredient()],
   steps: [''],
+  notes: '',
+  servingsQuantity: '',
+  servingsUnit: '',
 });
 
 const tagInput = ref('');
@@ -281,6 +323,9 @@ const applyDraft = (data, { replaceExisting = false } = {}) => {
   if (replaceExisting && data.createdAt) {
     form.createdAt = new Date(data.createdAt).toISOString().slice(0, 10);
   }
+  setField('notes', data.notes);
+  setField('servingsQuantity', data.servingsQuantity);
+  setField('servingsUnit', data.servingsUnit);
 
   const nextIngredients = (data.ingredients || []).map((item) => ({
     id: item.id || makeId(),
@@ -367,6 +412,9 @@ const buildPayload = () => {
     tags,
     ingredients,
     steps,
+    notes: form.notes,
+    servingsQuantity: form.servingsQuantity,
+    servingsUnit: form.servingsUnit,
   };
 };
 
