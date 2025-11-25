@@ -18,9 +18,7 @@
           :to="{ name: 'recipe-new' }"
           class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
+          <PlusIcon class="h-4 w-4" />
           Create recipe
         </RouterLink>
         <RouterLink
@@ -104,10 +102,7 @@
             class="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:text-orange-700 active:scale-95"
             @click="editRecipe"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.06 6.19l2.75 2.75" />
-            </svg>
+            <PencilSquareIcon class="h-4 w-4" />
             Edit
           </button>
           <button
@@ -116,12 +111,7 @@
             @click="openDeleteDialog"
             title="Delete recipe"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 6h18" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 6v12a2 2 0 002 2h4a2 2 0 002-2V6" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 10v6m4-6v6" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 6l1-2h4l1 2" />
-            </svg>
+            <TrashIcon class="h-4 w-4" />
             Delete
           </button>
         </div>
@@ -198,6 +188,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline';
 import TagPill from '../components/TagPill.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useRecipeStore } from '../stores/recipeStore';

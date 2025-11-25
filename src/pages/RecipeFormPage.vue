@@ -13,9 +13,7 @@
             :to="{ name: 'recipe-import' }"
             class="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12h16M12 4l8 8-8 8" />
-            </svg>
+            <ArrowDownTrayIcon class="h-4 w-4" />
             Import via LLM
           </RouterLink>
           <RouterLink
@@ -38,9 +36,7 @@
             :disabled="isSaving"
             @click="save"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7" />
-            </svg>
+            <CheckIcon class="h-4 w-4" />
             {{ isSaving ? 'Saving…' : 'Save recipe' }}
           </button>
         </div>
@@ -143,9 +139,7 @@
               :disabled="form.ingredients.length === 1"
               @click="removeIngredient(index)"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <XMarkIcon class="h-4 w-4" />
               Remove
             </button>
           </div>
@@ -154,12 +148,10 @@
 
       <button
         type="button"
-      class="inline-flex items-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
-      @click="addIngredient"
-    >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
+        class="inline-flex items-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+        @click="addIngredient"
+      >
+        <PlusIcon class="h-4 w-4" />
         Add ingredient
       </button>
     </div>
@@ -193,9 +185,7 @@
             :disabled="form.steps.length === 1"
             @click="removeStep(index)"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <XMarkIcon class="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -205,9 +195,7 @@
         class="inline-flex items-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
         @click="addStep"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
+        <PlusIcon class="h-4 w-4" />
         Add another step
       </button>
     </div>
@@ -259,9 +247,7 @@
         :disabled="isSaving"
         @click="save"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7" />
-        </svg>
+        <CheckIcon class="h-4 w-4" />
         {{ isSaving ? 'Saving…' : 'Save recipe' }}
       </button>
     </div>
@@ -271,6 +257,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { ArrowDownTrayIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import { useRecipeStore } from '../stores/recipeStore';
 import { useSettingsStore } from '../stores/settingsStore';
 

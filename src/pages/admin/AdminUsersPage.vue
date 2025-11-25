@@ -75,7 +75,7 @@
                 v-if="user.role !== 'owner'"
                 class="text-xs font-semibold text-red-600 hover:underline"
                 type="button"
-                @click="confirmRemove(user)"
+                @click="openDeleteDialog(user)"
               >
                 Remove
               </button>
@@ -121,11 +121,21 @@
     </div>
 
     <p v-if="state.error" class="text-sm font-semibold text-red-600">{{ state.error }}</p>
+
+    <ConfirmDialog
+      :open="deleteDialog.open"
+      :title="`Remove ${deleteDialog.user?.username || 'this user'}?`"
+      :message="`This will permanently remove ${deleteDialog.user?.username || 'the user'} and their access. This cannot be undone.`"
+      confirm-label="Remove"
+      @cancel="closeDeleteDialog"
+      @confirm="confirmRemove"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive } from 'vue';
+import ConfirmDialog from '../../components/ConfirmDialog.vue';
 import { useAuthStore } from '../../stores/authStore';
 
 const auth = useAuthStore();
@@ -142,6 +152,11 @@ const state = reactive({
 
 const userRoles = state.userRoles;
 const isOwner = computed(() => auth.isOwner());
+const deleteDialog = reactive({
+  open: false,
+  user: null,
+  deleting: false,
+});
 
 const loadData = async () => {
   state.loading = true;
@@ -194,18 +209,33 @@ const generateCode = async (role) => {
   }
 };
 
-const confirmRemove = async (user) => {
-  if (!window.confirm(`Remove ${user.username}?`)) return;
+const openDeleteDialog = (user) => {
+  deleteDialog.user = user;
+  deleteDialog.open = true;
+  state.error = null;
+};
+
+const closeDeleteDialog = () => {
+  deleteDialog.open = false;
+  deleteDialog.user = null;
+};
+
+const confirmRemove = async () => {
+  if (!deleteDialog.user || deleteDialog.deleting) return;
+  deleteDialog.deleting = true;
   try {
-    const res = await fetch(`/api/users/${user.id}`, {
+    const res = await fetch(`/api/users/${deleteDialog.user.id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to remove user.');
-    state.users = state.users.filter((u) => u.id !== user.id);
+    state.users = state.users.filter((u) => u.id !== deleteDialog.user.id);
+    closeDeleteDialog();
   } catch (error) {
     state.error = error.message || 'Unable to remove user.';
+  } finally {
+    deleteDialog.deleting = false;
   }
 };
 

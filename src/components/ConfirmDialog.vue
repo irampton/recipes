@@ -3,9 +3,7 @@
     <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200">
       <div class="flex items-start gap-3">
         <div class="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-700">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M5.07 19h13.86a1 1 0 00.96-1.28l-5.18-14.2a1 1 0 00-1.88 0l-5.18 14.2A1 1 0 005.07 19z" />
-          </svg>
+          <ExclamationTriangleIcon class="h-5 w-5" />
         </div>
         <div class="space-y-2">
           <h3 class="text-lg font-semibold text-slate-900">{{ title }}</h3>
@@ -33,6 +31,8 @@
 </template>
 
 <script setup>
+import { ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
+
 defineProps({
   open: {
     type: Boolean,

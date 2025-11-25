@@ -13,9 +13,7 @@
               @click="$emit('go-home')"
               title="Home"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l9-8 9 8M5 10v10h4V14h6v6h4V10" />
-              </svg>
+              <HomeIcon class="h-4 w-4" />
               <span class="hidden sm:inline">Home</span>
             </button>
             <RouterLink
@@ -23,9 +21,7 @@
               class="inline-flex h-10 items-center justify-center border-l border-slate-200 bg-orange-600 px-4 text-xs font-semibold text-white transition hover:bg-orange-700 hover:shadow-lg hover:shadow-orange-200 active:scale-95"
               title="Create recipe"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
+              <PlusIcon class="h-4 w-4" />
               <span class="hidden sm:inline">New</span>
             </RouterLink>
           </div>
@@ -50,6 +46,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import { HomeIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import AccountMenu from './AccountMenu.vue';
 
 defineProps({

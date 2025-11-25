@@ -34,10 +34,7 @@
           <p class="text-sm text-slate-600">We will ask for structured JSON with title, tags, ingredients, steps, serving size, and notes.</p>
         </div>
         <span v-if="loading" class="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="10" stroke-width="1.5" class="opacity-25" />
-            <path d="M12 2a10 10 0 0110 10" stroke-width="1.5" stroke-linecap="round" class="opacity-75" />
-          </svg>
+          <ArrowPathIcon class="h-4 w-4 animate-spin" />
           Importing…
         </span>
       </div>
@@ -81,16 +78,11 @@
         <p class="text-sm text-slate-600">We will return to the create form with the extracted details filled in.</p>
         <button
           type="submit"
-        class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-        :disabled="loading || !llmAvailable || !settingsReady"
-      >
-        <svg v-if="!loading" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 5l7 7-7 7-7-7 7-7z" />
-        </svg>
-          <svg v-else class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="10" stroke-width="1.5" class="opacity-25" />
-            <path d="M12 2a10 10 0 0110 10" stroke-width="1.5" stroke-linecap="round" class="opacity-75" />
-          </svg>
+          class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="loading || !llmAvailable || !settingsReady"
+        >
+          <ArrowDownTrayIcon v-if="!loading" class="h-4 w-4" />
+          <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
           {{ loading ? 'Importing…' : 'Import via LLM' }}
         </button>
       </div>
@@ -101,6 +93,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
+import { ArrowDownTrayIcon, ArrowPathIcon } from '@heroicons/vue/24/outline';
 import { importRecipeFromText } from '../services/importer';
 import { useRecipeStore } from '../stores/recipeStore';
 import { useSettingsStore } from '../stores/settingsStore';

@@ -10,9 +10,7 @@
           :to="{ name: 'home' }"
           class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-orange-200 hover:text-orange-700"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l9-8 9 8M5 10v10h4V14h6v6h4V10" />
-          </svg>
+          <HomeIcon class="h-4 w-4" />
           Recipes
         </RouterLink>
       </div>
@@ -42,21 +40,12 @@
 <script setup>
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { HomeIcon, ServerStackIcon, UserGroupIcon } from '@heroicons/vue/24/outline';
 
 const route = useRoute();
 
-const UserIcon = {
-  template:
-    '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M12 12a5 5 0 100-10 5 5 0 000 10z\"/><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M4.75 21a7.25 7.25 0 0114.5 0\"/></svg>',
-};
-
-const ServerIcon = {
-  template:
-    '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"6\" rx=\"1.5\" ry=\"1.5\" stroke-width=\"1.5\"/><rect x=\"3\" y=\"14\" width=\"18\" height=\"6\" rx=\"1.5\" ry=\"1.5\" stroke-width=\"1.5\"/><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M7 7h.01M11 7h6M7 17h.01M11 17h6\"/></svg>',
-};
-
 const links = computed(() => [
-  { name: 'admin-users', label: 'Users & access', to: { name: 'admin-users' }, icon: UserIcon },
-  { name: 'admin-server-settings', label: 'Server settings', to: { name: 'admin-server-settings' }, icon: ServerIcon },
+  { name: 'admin-users', label: 'Users & access', to: { name: 'admin-users' }, icon: UserGroupIcon },
+  { name: 'admin-server-settings', label: 'Server settings', to: { name: 'admin-server-settings' }, icon: ServerStackIcon },
 ]);
 </script>

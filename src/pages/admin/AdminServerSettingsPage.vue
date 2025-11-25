@@ -10,10 +10,7 @@
         v-if="status.loading"
         class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
       >
-        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="12" cy="12" r="10" stroke-width="1.5" class="opacity-25" />
-          <path d="M12 2a10 10 0 0110 10" stroke-width="1.5" stroke-linecap="round" class="opacity-75" />
-        </svg>
+        <ArrowPathIcon class="h-4 w-4 animate-spin" />
         Loading…
       </span>
     </header>
@@ -54,13 +51,8 @@
             class="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="status.loading || settingsStore.state.saving"
           >
-            <svg v-if="!settingsStore.state.saving" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7" />
-            </svg>
-            <svg v-else class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="10" stroke-width="1.5" class="opacity-25" />
-              <path d="M12 2a10 10 0 0110 10" stroke-width="1.5" stroke-linecap="round" class="opacity-75" />
-            </svg>
+            <CheckIcon v-if="!settingsStore.state.saving" class="h-4 w-4" />
+            <ArrowPathIcon v-else class="h-4 w-4 animate-spin" />
             {{ settingsStore.state.saving ? 'Saving…' : 'Save changes' }}
           </button>
           <button
@@ -108,6 +100,7 @@
 
 <script setup>
 import { computed, onMounted, reactive } from 'vue';
+import { ArrowPathIcon, CheckIcon } from '@heroicons/vue/24/outline';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 const settingsStore = useSettingsStore();

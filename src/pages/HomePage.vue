@@ -18,9 +18,7 @@
           :to="{ name: 'recipe-new' }"
           class="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-700 active:scale-[0.99]"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
+          <PlusIcon class="h-5 w-5" />
           Create recipe
         </RouterLink>
       </div>
@@ -47,4 +45,5 @@
 
 <script setup>
 import { RouterLink } from 'vue-router';
+import { PlusIcon } from '@heroicons/vue/24/outline';
 </script>
