@@ -33,7 +33,6 @@
         @click="select(user)"
       >
         <span class="font-semibold text-slate-800">{{ user.username }}</span>
-        <span class="text-xs uppercase tracking-wide text-slate-500">{{ user.role }}</span>
       </button>
     </div>
     <p v-if="modelValue" class="mt-1 text-xs text-slate-600">
@@ -49,6 +48,10 @@ const props = defineProps({
   modelValue: {
     type: Object,
     default: null,
+  },
+  friendsOnly: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -66,7 +69,8 @@ const fetchUsers = async (value) => {
     return;
   }
   try {
-    const res = await fetch(`/api/users/search?q=${encodeURIComponent(value.trim())}`, { credentials: 'include' });
+    const scope = props.friendsOnly ? '&scope=friends' : '';
+    const res = await fetch(`/api/users/search?q=${encodeURIComponent(value.trim())}${scope}`, { credentials: 'include' });
     const data = await res.json();
     if (res.ok && data.success) {
       results.value = data.users || [];

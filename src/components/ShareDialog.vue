@@ -42,10 +42,11 @@
 
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
           <div class="flex items-center justify-between">
-            <p class="text-sm font-semibold text-slate-900">Share with a user</p>
+            <p class="text-sm font-semibold text-slate-900">Share with a friend</p>
             <span class="text-xs font-semibold text-slate-500">{{ userShares.length }} shared</span>
           </div>
-          <UserAutocomplete v-model="selectedUser" />
+          <UserAutocomplete v-model="selectedUser" :friends-only="true" />
+          <p class="text-xs text-slate-500">Only your friends will appear here.</p>
           <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
             <input v-model="canEditSelected" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500" />
             Allow edit

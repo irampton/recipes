@@ -1,6 +1,6 @@
 {
   "name": "lembas",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Lembas - a cozy, shared recipe keeper",
   "main": "index.js",
   "scripts": {

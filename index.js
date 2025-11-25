@@ -20,6 +20,11 @@ const io = new Server(server, {
   cors: { origin: true },
 });
 
+const emitFriendUpdate = (userId) => {
+  if (!userId) return;
+  io.to(`user:${userId}`).emit("friends:updated");
+};
+
 app.use(express.json());
 app.use(auth.attachSession);
 
@@ -123,15 +128,155 @@ app.get("/api/me", auth.meHandler);
 
 app.get("/api/users/search", auth.requireAuth, (req, res) => {
   const q = (req.query.q || "").toString().trim().toLowerCase();
+  const friendsOnly = req.query.scope === "friends" || req.query.friendsOnly === "true";
   if (!q) {
     res.json({ success: true, users: [] });
     return;
   }
-  const all = db.getUsers();
-  const matches = all
-    .filter((u) => u.username.toLowerCase().includes(q))
-    .slice(0, 10);
+  const userList = friendsOnly
+    ? db.listFriendsForUser(req.user.id).map((friend) => ({ id: friend.userId, username: friend.username }))
+    : db
+        .getUsers()
+        .filter((u) => u.id !== req.user.id)
+        .map((u) => ({ id: u.id, username: u.username }));
+
+  const matches = userList.filter((u) => u.username.toLowerCase().includes(q)).slice(0, 10);
   res.json({ success: true, users: matches });
+});
+
+app.get("/api/friends", auth.requireAuth, (req, res) => {
+  const friends = db.listFriendsForUser(req.user.id);
+  const requests = db.listFriendRequests(req.user.id);
+  res.json({ success: true, friends, requests });
+});
+
+app.get("/api/friends/search", auth.requireAuth, (req, res) => {
+  const q = (req.query.q || "").toString().trim().toLowerCase();
+  if (!q) {
+    res.json({ success: true, users: [] });
+    return;
+  }
+  const friends = db.listFriendsForUser(req.user.id);
+  const friendIds = new Set(friends.map((f) => f.userId));
+  const pending = db.listFriendRequests(req.user.id);
+  const incomingIds = new Set((pending.incoming || []).map((r) => r.fromUserId));
+  const outgoingIds = new Set((pending.outgoing || []).map((r) => r.toUserId));
+
+  const users = db
+    .getUsers()
+    .filter((u) => u.id !== req.user.id && u.username.toLowerCase().includes(q))
+    .slice(0, 10)
+    .map((u) => ({
+      id: u.id,
+      username: u.username,
+      isFriend: friendIds.has(u.id),
+      incomingRequest: incomingIds.has(u.id),
+      outgoingRequest: outgoingIds.has(u.id),
+    }));
+
+  res.json({ success: true, users });
+});
+
+app.post("/api/friend-requests", auth.requireAuth, (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) {
+    res.status(400).json({ success: false, error: "Missing user id." });
+    return;
+  }
+  if (userId === req.user.id) {
+    res.status(400).json({ success: false, error: "You cannot friend yourself." });
+    return;
+  }
+  const target = db.findUserById(userId);
+  if (!target) {
+    res.status(404).json({ success: false, error: "User not found." });
+    return;
+  }
+  if (db.areFriends(req.user.id, userId)) {
+    res.status(400).json({ success: false, error: "You are already friends." });
+    return;
+  }
+
+  const opposite = db.findPendingFriendRequest(userId, req.user.id);
+  if (opposite) {
+    db.setFriendRequestStatus(opposite.id, "accepted");
+    db.markRequestsAcceptedBetween(req.user.id, userId);
+    const friendship = db.addFriendship(req.user.id, userId);
+    emitFriendUpdate(req.user.id);
+    emitFriendUpdate(userId);
+    res.json({ success: true, friendship, autoAccepted: true });
+    return;
+  }
+
+  const request = db.upsertFriendRequest(req.user.id, userId);
+  emitFriendUpdate(req.user.id);
+  emitFriendUpdate(userId);
+  res.json({ success: true, request });
+});
+
+app.post("/api/friend-requests/:id/accept", auth.requireAuth, (req, res) => {
+  const request = db.getFriendRequestById(req.params.id);
+  if (!request) {
+    res.status(404).json({ success: false, error: "Request not found." });
+    return;
+  }
+  if (request.toUserId !== req.user.id) {
+    res.status(403).json({ success: false, error: "You cannot accept this request." });
+    return;
+  }
+  if (request.status !== "pending") {
+    res.status(400).json({ success: false, error: "This request has already been handled." });
+    return;
+  }
+
+  db.setFriendRequestStatus(request.id, "accepted");
+  db.markRequestsAcceptedBetween(request.fromUserId, request.toUserId);
+  const friendship = db.addFriendship(request.fromUserId, request.toUserId);
+  emitFriendUpdate(req.user.id);
+  emitFriendUpdate(request.fromUserId);
+  res.json({ success: true, friendship });
+});
+
+app.post("/api/friend-requests/:id/reject", auth.requireAuth, (req, res) => {
+  const request = db.getFriendRequestById(req.params.id);
+  if (!request) {
+    res.status(404).json({ success: false, error: "Request not found." });
+    return;
+  }
+  if (request.toUserId !== req.user.id) {
+    res.status(403).json({ success: false, error: "You cannot reject this request." });
+    return;
+  }
+  if (request.status !== "pending") {
+    res.status(400).json({ success: false, error: "This request has already been handled." });
+    return;
+  }
+  db.setFriendRequestStatus(request.id, "rejected");
+  emitFriendUpdate(req.user.id);
+  emitFriendUpdate(request.fromUserId);
+  res.json({ success: true });
+});
+
+app.delete("/api/friends/:friendId", auth.requireAuth, (req, res) => {
+  const friendId = req.params.friendId;
+  if (!friendId) {
+    res.status(400).json({ success: false, error: "Missing friend id." });
+    return;
+  }
+  if (!db.areFriends(req.user.id, friendId)) {
+    res.status(404).json({ success: false, error: "Not friends." });
+    return;
+  }
+  const removed = db.removeFriendship(req.user.id, friendId);
+  db.deleteSharesBetweenUsers(req.user.id, friendId);
+  db.markRequestsAcceptedBetween(req.user.id, friendId);
+  if (!removed) {
+    res.status(500).json({ success: false, error: "Unable to remove friend." });
+    return;
+  }
+  emitFriendUpdate(req.user.id);
+  emitFriendUpdate(friendId);
+  res.json({ success: true });
 });
 
 app.get("/api/shared-recipes", auth.requireAuth, (req, res) => {
@@ -188,7 +333,14 @@ app.get("/api/recipes/:id/shares", auth.requireAuth, (req, res) => {
   }
   const shares = db.listSharesForRecipe(id);
   const userShares = shares.filter((s) => s.type === "user");
-  const withNames = userShares.map((s) => {
+  const filteredShares = userShares.filter((s) => {
+    const stillFriends = db.areFriends(recipe.ownerId, s.userId);
+    if (!stillFriends) {
+      db.deleteUserShare(id, s.userId);
+    }
+    return stillFriends;
+  });
+  const withNames = filteredShares.map((s) => {
     const user = db.findUserById(s.userId);
     return { ...s, username: user?.username || "Unknown" };
   });
@@ -232,6 +384,10 @@ app.post("/api/recipes/:id/share/user", auth.requireAuth, (req, res) => {
     res.status(404).json({ success: false, error: "User not found." });
     return;
   }
+  if (!db.areFriends(req.user.id, userId)) {
+    res.status(400).json({ success: false, error: "You can only share recipes with friends." });
+    return;
+  }
   const share = db.upsertUserShare(id, userId, Boolean(canEdit));
   res.json({ success: true, share: { ...share, username: targetUser.username } });
 });
@@ -259,9 +415,17 @@ app.get("/api/share/:token", async (req, res) => {
     res.status(404).json({ success: false, error: "Recipe not found." });
     return;
   }
-  if (share.type === "user" && (!req.user || req.user.id !== share.userId) && (!req.user || req.user.id !== recipe.ownerId)) {
-    res.status(403).json({ success: false, error: "Unauthorized to view this recipe." });
-    return;
+  if (share.type === "user") {
+    const isOwner = req.user && req.user.id === recipe.ownerId;
+    const isRecipient = req.user && req.user.id === share.userId;
+    if (!isOwner && !isRecipient) {
+      res.status(403).json({ success: false, error: "Unauthorized to view this recipe." });
+      return;
+    }
+    if (!isOwner && !db.areFriends(req.user.id, recipe.ownerId)) {
+      res.status(403).json({ success: false, error: "You must be friends to view this recipe." });
+      return;
+    }
   }
   res.json({
     success: true,
@@ -288,6 +452,16 @@ app.put("/api/share/:token", async (req, res) => {
     return;
   }
   const isOwner = req.user && req.user.id === recipe.ownerId;
+  if (share.type === "user" && !isOwner) {
+    if (!req.user || req.user.id !== share.userId) {
+      res.status(403).json({ success: false, error: "You cannot edit this recipe." });
+      return;
+    }
+    if (!db.areFriends(req.user.id, recipe.ownerId)) {
+      res.status(403).json({ success: false, error: "You must be friends to edit this recipe." });
+      return;
+    }
+  }
   const canEdit = isOwner || (Boolean(share.canEdit) && (share.userId ? req.user && req.user.id === share.userId : true));
   if (!canEdit) {
     res.status(403).json({ success: false, error: "You cannot edit this recipe." });
@@ -370,6 +544,7 @@ io.use(auth.socketAuth);
 
 io.on("connection", (socket) => {
   const user = socket.data.user;
+  socket.join(`user:${user.id}`);
   const recipes = db.getRecipesForOwner(user.id);
   socket.emit("recipes:updated", recipes);
 

@@ -83,6 +83,32 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shares_recipe ON recipe_shares(recipeId);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_public_share_unique ON recipe_shares(recipeId) WHERE type = 'public';
   CREATE UNIQUE INDEX IF NOT EXISTS idx_user_share_unique ON recipe_shares(recipeId, userId) WHERE type = 'user';
+
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id TEXT PRIMARY KEY,
+    fromUserId TEXT NOT NULL,
+    toUserId TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+    createdAt TEXT NOT NULL,
+    respondedAt TEXT,
+    UNIQUE(fromUserId, toUserId),
+    FOREIGN KEY (fromUserId) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (toUserId) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(toUserId);
+  CREATE INDEX IF NOT EXISTS idx_friend_requests_status ON friend_requests(status);
+
+  CREATE TABLE IF NOT EXISTS friends (
+    id TEXT PRIMARY KEY,
+    userA TEXT NOT NULL,
+    userB TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    UNIQUE(userA, userB),
+    FOREIGN KEY (userA) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (userB) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_friends_usera ON friends(userA);
+  CREATE INDEX IF NOT EXISTS idx_friends_userb ON friends(userB);
 `);
 
 const joinCodeColumns = db.prepare("PRAGMA table_info('join_codes')").all();
@@ -339,6 +365,159 @@ export const getShareByToken = (token) => {
   return stmt.get(token) || null;
 };
 
+const normalizePair = (a, b) => {
+  if (!a || !b) return null;
+  return a < b ? [a, b] : [b, a];
+};
+
+export const areFriends = (userA, userB) => {
+  const pair = normalizePair(userA, userB);
+  if (!pair) return false;
+  const row = db.prepare("SELECT id FROM friends WHERE userA = ? AND userB = ? LIMIT 1").get(pair[0], pair[1]);
+  return Boolean(row);
+};
+
+export const addFriendship = (userA, userB) => {
+  const pair = normalizePair(userA, userB);
+  if (!pair) return null;
+  const existing = db.prepare("SELECT * FROM friends WHERE userA = ? AND userB = ?").get(pair[0], pair[1]);
+  if (existing) return existing;
+  const payload = {
+    id: crypto.randomUUID(),
+    userA: pair[0],
+    userB: pair[1],
+    createdAt: new Date().toISOString(),
+  };
+  db.prepare("INSERT INTO friends (id, userA, userB, createdAt) VALUES (@id, @userA, @userB, @createdAt)").run(payload);
+  return payload;
+};
+
+export const removeFriendship = (userA, userB) => {
+  const pair = normalizePair(userA, userB);
+  if (!pair) return false;
+  const info = db.prepare("DELETE FROM friends WHERE userA = ? AND userB = ?").run(pair[0], pair[1]);
+  return info.changes > 0;
+};
+
+export const listFriendsForUser = (userId) => {
+  if (!userId) return [];
+  const stmt = db.prepare(`
+    SELECT f.id, f.userA, f.userB, f.createdAt,
+           CASE WHEN f.userA = @userId THEN f.userB ELSE f.userA END as friendId,
+           u.username as friendUsername
+    FROM friends f
+    JOIN users u ON u.id = CASE WHEN f.userA = @userId THEN f.userB ELSE f.userA END
+    WHERE f.userA = @userId OR f.userB = @userId
+    ORDER BY u.username COLLATE NOCASE
+  `);
+  return stmt.all({ userId }).map((row) => ({
+    id: row.id,
+    userId: row.friendId,
+    username: row.friendUsername,
+    createdAt: row.createdAt,
+  }));
+};
+
+export const findPendingFriendRequest = (fromUserId, toUserId) => {
+  const stmt = db.prepare(
+    "SELECT * FROM friend_requests WHERE fromUserId = ? AND toUserId = ? AND status = 'pending' LIMIT 1"
+  );
+  return stmt.get(fromUserId, toUserId) || null;
+};
+
+export const getFriendRequestById = (id) => {
+  if (!id) return null;
+  const stmt = db.prepare("SELECT * FROM friend_requests WHERE id = ?");
+  return stmt.get(id) || null;
+};
+
+export const upsertFriendRequest = (fromUserId, toUserId) => {
+  const existing = db.prepare("SELECT * FROM friend_requests WHERE fromUserId = ? AND toUserId = ?").get(fromUserId, toUserId);
+  const now = new Date().toISOString();
+  if (existing) {
+    db.prepare("UPDATE friend_requests SET status = 'pending', createdAt = ?, respondedAt = NULL WHERE id = ?").run(
+      now,
+      existing.id
+    );
+    return { ...existing, status: "pending", createdAt: now, respondedAt: null };
+  }
+  const payload = {
+    id: crypto.randomUUID(),
+    fromUserId,
+    toUserId,
+    status: "pending",
+    createdAt: now,
+    respondedAt: null,
+  };
+  db.prepare(
+    "INSERT INTO friend_requests (id, fromUserId, toUserId, status, createdAt, respondedAt) VALUES (@id, @fromUserId, @toUserId, @status, @createdAt, @respondedAt)"
+  ).run(payload);
+  return payload;
+};
+
+export const setFriendRequestStatus = (id, status) => {
+  const now = new Date().toISOString();
+  const info = db.prepare("UPDATE friend_requests SET status = ?, respondedAt = ? WHERE id = ?").run(status, now, id);
+  if (!info.changes) return null;
+  return getFriendRequestById(id);
+};
+
+export const listFriendRequests = (userId) => {
+  if (!userId) return { incoming: [], outgoing: [] };
+  const incomingStmt = db.prepare(`
+    SELECT fr.*, u.username as fromUsername
+    FROM friend_requests fr
+    JOIN users u ON u.id = fr.fromUserId
+    WHERE fr.toUserId = ? AND fr.status = 'pending'
+    ORDER BY fr.createdAt DESC
+  `);
+  const outgoingStmt = db.prepare(`
+    SELECT fr.*, u.username as toUsername
+    FROM friend_requests fr
+    JOIN users u ON u.id = fr.toUserId
+    WHERE fr.fromUserId = ? AND fr.status = 'pending'
+    ORDER BY fr.createdAt DESC
+  `);
+  return {
+    incoming: incomingStmt.all(userId).map((row) => ({
+      id: row.id,
+      fromUserId: row.fromUserId,
+      toUserId: row.toUserId,
+      status: row.status,
+      createdAt: row.createdAt,
+      username: row.fromUsername,
+    })),
+    outgoing: outgoingStmt.all(userId).map((row) => ({
+      id: row.id,
+      fromUserId: row.fromUserId,
+      toUserId: row.toUserId,
+      status: row.status,
+      createdAt: row.createdAt,
+      username: row.toUsername,
+    })),
+  };
+};
+
+export const markRequestsAcceptedBetween = (userA, userB) => {
+  const now = new Date().toISOString();
+  db.prepare(
+    "UPDATE friend_requests SET status = 'accepted', respondedAt = @now WHERE status = 'pending' AND ((fromUserId = @userA AND toUserId = @userB) OR (fromUserId = @userB AND toUserId = @userA))"
+  ).run({ userA, userB, now });
+};
+
+export const deleteSharesBetweenUsers = (userA, userB) => {
+  db.prepare(
+    `
+    DELETE FROM recipe_shares
+    WHERE type = 'user' AND (
+      (recipeId IN (SELECT id FROM recipes WHERE ownerId = ?) AND userId = ?)
+      OR
+      (recipeId IN (SELECT id FROM recipes WHERE ownerId = ?) AND userId = ?)
+    )
+  `
+  ).run(userA, userB, userB, userA);
+};
+
 export const listSharedRecipesForUser = (userId) => {
   if (!userId) return [];
   const stmt = db.prepare(`
@@ -347,7 +526,11 @@ export const listSharedRecipesForUser = (userId) => {
     FROM recipe_shares rs
     JOIN recipes r ON r.id = rs.recipeId
     JOIN users u ON u.id = r.ownerId
-    WHERE rs.type = 'user' AND rs.userId = ?
+    WHERE rs.type = 'user'
+      AND rs.userId = ?
+      AND EXISTS (
+        SELECT 1 FROM friends f WHERE (f.userA = r.ownerId AND f.userB = rs.userId) OR (f.userB = r.ownerId AND f.userA = rs.userId)
+      )
     ORDER BY r.title COLLATE NOCASE
   `);
   return stmt.all(userId).map((row) => ({

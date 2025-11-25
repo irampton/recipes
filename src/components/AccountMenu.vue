@@ -5,8 +5,14 @@
       type="button"
       @click="open = !open"
     >
-      <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-600 text-xs font-bold uppercase text-white">
+      <span class="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-600 text-xs font-bold uppercase text-white">
         {{ user.username?.slice(0, 2) || '?' }}
+        <span
+          v-if="hasPendingRequests"
+          class="absolute -right-1 -top-1 inline-flex h-3 w-3 rounded-full bg-orange-100 ring-2 ring-white"
+        >
+          <span class="m-auto h-2 w-2 rounded-full bg-orange-600"></span>
+        </span>
       </span>
       <span class="hidden sm:inline">{{ user.username }}</span>
       <ChevronDownIcon class="h-4 w-4" />
@@ -18,9 +24,21 @@
     >
       <div class="mb-2">
         <p class="text-sm font-semibold text-slate-900">{{ user.username }}</p>
-        <p class="text-xs uppercase tracking-[0.15em] text-orange-600">{{ user.role }}</p>
       </div>
       <div class="space-y-2">
+        <RouterLink
+          :to="{ name: 'settings-friends' }"
+          class="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:-translate-y-[1px] hover:border-orange-300 hover:bg-orange-50"
+          @click="open = false"
+        >
+          Friends
+          <span
+            v-if="pendingCount"
+            class="inline-flex min-w-[20px] items-center justify-center rounded-full bg-orange-600 px-2 text-[11px] font-bold uppercase tracking-wide text-white"
+          >
+            {{ pendingCount }}
+          </span>
+        </RouterLink>
         <RouterLink
           v-if="canManageUsers"
           :to="{ name: 'admin-users' }"
@@ -54,15 +72,19 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
+import { useFriendStore } from '../stores/friendStore';
 import { ArrowRightOnRectangleIcon, ChevronDownIcon } from '@heroicons/vue/24/outline';
 
 const auth = useAuthStore();
+const friendStore = useFriendStore();
 const router = useRouter();
 const open = ref(false);
 
 const user = computed(() => auth.state.user || {});
 const canManageUsers = computed(() => ['owner', 'admin'].includes(user.value.role));
 const isOwner = computed(() => user.value.role === 'owner');
+const pendingCount = computed(() => friendStore.pendingCount());
+const hasPendingRequests = computed(() => friendStore.hasPendingRequests());
 
 const handleLogout = async () => {
   await auth.logout();

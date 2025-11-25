@@ -2,7 +2,11 @@
   <div class="relative min-h-screen bg-slate-50 text-slate-900">
     <NavBar v-if="auth.state.user" :show-account="!!auth.state.user" @go-home="goHome" />
     <div v-if="showAppShell" class="grid min-h-screen md:grid-cols-[320px_1fr]">
-      <AdminSidebar v-if="isAdminRoute" />
+      <SettingsSidebar
+        v-if="showSettingsSidebar"
+        :pending-count="friendStore.pendingCount()"
+        :show-admin="canSeeAdmin"
+      />
       <RecipeSidebar
         v-else
         :recipes="recipes"
@@ -29,14 +33,16 @@ import { computed, onMounted, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import RecipeSidebar from './components/RecipeSidebar.vue';
 import NavBar from './components/NavBar.vue';
-import AdminSidebar from './components/AdminSidebar.vue';
+import SettingsSidebar from './components/SettingsSidebar.vue';
 import { useRecipeStore } from './stores/recipeStore';
 import { useAuthStore } from './stores/authStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useFriendStore } from './stores/friendStore';
 
 const store = useRecipeStore();
 const auth = useAuthStore();
 const settingsStore = useSettingsStore();
+const friendStore = useFriendStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -45,7 +51,9 @@ const activeId = computed(() => route.params.id);
 const sharedRecipes = computed(() => store.state.sharedRecipes);
 const activeShareToken = computed(() => route.params.token);
 const authRoutes = computed(() => ['login', 'signup']);
-const isAdminRoute = computed(() => Boolean(route.meta?.isAdminPage));
+const canSeeAdmin = computed(() => ['owner', 'admin'].includes(auth.state.user?.role));
+const isSettingsRoute = computed(() => Boolean(route.meta?.settingsPage));
+const showSettingsSidebar = computed(() => isSettingsRoute.value);
 const showAppShell = computed(() => auth.state.user && !authRoutes.value.includes(route.name));
 
 watch(
@@ -55,9 +63,11 @@ watch(
       store.loadRecipes();
       store.loadSharedRecipes();
       settingsStore.loadSettings();
+      friendStore.loadFriends();
     } else {
       store.reset();
       settingsStore.reset();
+      friendStore.reset();
     }
   },
   { immediate: true }
@@ -69,6 +79,7 @@ onMounted(async () => {
     store.loadRecipes();
     store.loadSharedRecipes();
     settingsStore.loadSettings();
+    friendStore.loadFriends();
   } else if (!authRoutes.value.includes(route.name) && !route.meta?.allowShare) {
     router.replace({ name: 'login', query: { redirect: route.fullPath } });
   }
