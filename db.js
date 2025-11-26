@@ -146,6 +146,12 @@ if (!hasServingsUnit) {
   db.exec("ALTER TABLE recipes ADD COLUMN servingsUnit TEXT DEFAULT '';");
 }
 
+try {
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users (lower(username))");
+} catch (error) {
+  console.warn("[db] Unable to enforce case-insensitive username uniqueness:", error?.message || error);
+}
+
 export const getSetting = (key, fallback = null) => {
   if (!key) return fallback;
   const stmt = db.prepare("SELECT value FROM settings WHERE key = ?");
@@ -259,9 +265,13 @@ export const deleteRecipe = (id, ownerId) => {
 const userColumns = "id, username, role, createdAt, passwordHash";
 const userSafeColumns = "id, username, role, createdAt";
 
+const normalizeUsernameInput = (username) => (username || "").trim().toLowerCase();
+
 export const findUserByUsername = (username) => {
-  const stmt = db.prepare(`SELECT ${userColumns} FROM users WHERE username = ?`);
-  return stmt.get(username) || null;
+  const normalized = normalizeUsernameInput(username);
+  if (!normalized) return null;
+  const stmt = db.prepare(`SELECT ${userColumns} FROM users WHERE lower(username) = ?`);
+  return stmt.get(normalized) || null;
 };
 
 export const findUserById = (id) => {
