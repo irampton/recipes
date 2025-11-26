@@ -28,7 +28,7 @@
         </div>
 
         <div class="flex items-center gap-3 md:justify-start">
-          <img src="/lembas.png" alt="Lembas logo" class="h-12 w-12 rounded-2xl object-cover" />
+          <img src="/assests/lembas.svg" alt="Lembas logo" class="h-12 w-12 rounded-2xl object-cover" />
           <div>
             <p class="text-base font-semibold text-slate-900">Lembas</p>
             <p class="text-xs text-slate-500">Recipes worth sharing</p>
