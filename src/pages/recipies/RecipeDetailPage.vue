@@ -216,8 +216,8 @@
 import { computed, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { PencilSquareIcon, PlusIcon, ShareIcon, TrashIcon } from '@heroicons/vue/24/outline';
-import TagPill from '../../baseComponets/TagPill.vue';
-import ConfirmDialog from '../../baseComponets/ConfirmDialog.vue';
+import TagPill from '../../baseComponents/TagPill.vue';
+import ConfirmDialog from '../../baseComponents/ConfirmDialog.vue';
 import ShareDialog from '../../components/ShareDialog.vue';
 import { useRecipeStore } from '../../stores/recipeStore.js';
 

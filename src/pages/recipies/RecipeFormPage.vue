@@ -63,7 +63,6 @@
             placeholder="Choose a cookbook"
             :disabled="cookbookReadonly"
           />
-          <span class="text-xs text-slate-500">Recipes live inside a cookbook. Shared cookbooks appear when you can edit them.</span>
         </label>
         <label class="flex flex-col gap-2">
           <span class="text-sm font-semibold text-slate-800">Title</span>
@@ -274,23 +273,14 @@
   </section>
 </template>
 
-<script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
+<script>
 import { ArrowDownTrayIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { RouterLink } from 'vue-router';
 import UserAutocomplete from '../../components/UserAutocomplete.vue';
 import CookbookSelect from '../../components/CookbookSelect.vue';
 import { useRecipeStore } from '../../stores/recipeStore.js';
 import { useSettingsStore } from '../../stores/settingsStore.js';
 import { useAuthStore } from '../../stores/authStore.js';
-
-const store = useRecipeStore();
-const settingsStore = useSettingsStore();
-const auth = useAuthStore();
-const route = useRoute();
-const router = useRouter();
-const shareToken = computed(() => route.params.token);
-const isShareEdit = computed(() => route.name === 'recipe-share-edit');
 
 const today = new Date().toISOString().slice(0, 10);
 const makeId = () =>
@@ -302,243 +292,264 @@ const blankIngredient = () => ({
   unit: '',
 });
 
-const form = reactive({
-  title: '',
-  description: '',
-  author: '',
-  createdAt: today,
-  ingredients: [blankIngredient()],
-  steps: [''],
-  notes: '',
-  servingsQuantity: '',
-  servingsUnit: '',
-  cookbookId: '',
-});
-
-const tagInput = ref('');
-const isSaving = ref(false);
-const sharedRecipe = ref(null);
-const shareError = ref(null);
-const selectedCookbook = ref(null);
-const cookbookOptions = computed(() => {
-  const owned = (store.state.cookbooks || []).map((cb) => ({ ...cb, ownerUsername: 'You' }));
-  const editableShared = (store.state.sharedCookbooks || []).filter((cb) => cb.canEdit);
-  return [...owned, ...editableShared];
-});
-
-const currentRecipe = computed(() => (isShareEdit.value ? sharedRecipe.value : store.getRecipeById(route.params.id)));
-const isEditing = computed(() => Boolean(route.params.id) || isShareEdit.value);
-const isShareOwner = computed(() => sharedRecipe.value && auth.state.user?.id === sharedRecipe.value.ownerId);
-const showCookbookSelect = computed(() => !isShareEdit.value || Boolean(isShareOwner.value));
-const cookbookReadonly = computed(() => {
-  if (!isEditing.value) return false;
-  const ownerId = currentRecipe.value?.ownerId || '';
-  return Boolean(ownerId && auth.state.user?.id && ownerId !== auth.state.user.id);
-});
-const units = ['cup', 'tbsp', 'tsp', 'g', 'kg', 'oz', 'ml', 'l', 'piece', 'pinch'];
-const llmAvailable = computed(() => settingsStore.isLlmEnabled());
-
-const applyDraft = (data, { replaceExisting = false } = {}) => {
-  if (!data) return;
-  const setField = (key, value) => {
-    if (replaceExisting || value) {
-      form[key] = value ?? '';
-    }
-  };
-
-  setField('title', data.title);
-  setField('description', data.description);
-  setField('author', data.author);
-  if (replaceExisting && data.createdAt) {
-    form.createdAt = new Date(data.createdAt).toISOString().slice(0, 10);
-  }
-  setField('notes', data.notes);
-  setField('servingsQuantity', data.servingsQuantity);
-  setField('servingsUnit', data.servingsUnit);
-  setField('cookbookId', data.cookbookId);
-
-  const nextIngredients = (data.ingredients || []).map((item) => ({
-    id: item.id || makeId(),
-    name: item.name || '',
-    quantity: item.quantity ?? '',
-    unit: item.unit || '',
-  }));
-  if (replaceExisting || nextIngredients.length) {
-    form.ingredients = nextIngredients.length ? nextIngredients : [blankIngredient()];
-  }
-
-  const nextSteps = (data.steps && data.steps.length ? [...data.steps] : ['']).map((step) => step || '');
-  if (replaceExisting || (data.steps && data.steps.length)) {
-    form.steps = nextSteps;
-  }
-
-  if (replaceExisting || (data.tags && data.tags.length)) {
-    tagInput.value = (data.tags || []).join(', ');
-  }
-};
-
-const hydrateForm = () => {
-  if (!isEditing.value || !currentRecipe.value) return;
-  applyDraft(currentRecipe.value, { replaceExisting: true });
-  syncSelectedCookbook(currentRecipe.value.cookbookId);
-};
-
-watch(
-  () => currentRecipe.value,
-  () => hydrateForm(),
-  { immediate: true }
-);
-
-watch(
-  () => store.state.importedDraft,
-  (draft) => {
-    if (!draft || isEditing.value) return;
-    applyDraft(draft, { replaceExisting: true });
-    store.consumeImportedDraft();
+export default {
+  name: 'RecipeFormPage',
+  components: {
+    RouterLink,
+    ArrowDownTrayIcon,
+    CheckIcon,
+    PlusIcon,
+    XMarkIcon,
+    UserAutocomplete,
+    CookbookSelect,
   },
-  { immediate: true }
-);
-
-watch(
-  () => shareToken.value,
-  () => loadSharedRecipe(),
-  { immediate: true }
-);
-
-const loadSharedRecipe = async () => {
-  if (!isShareEdit.value || !shareToken.value) return;
-  shareError.value = null;
-  try {
-    const res = await fetch(`/api/share/${shareToken.value}`, { credentials: 'include' });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to load shared recipe.');
-    sharedRecipe.value = data.recipe;
-    applyDraft(data.recipe, { replaceExisting: true });
-    syncSelectedCookbook(data.recipe.cookbookId);
-  } catch (err) {
-    shareError.value = err.message || 'Unable to load shared recipe.';
-  }
-};
-
-const addIngredient = () => {
-  form.ingredients.push(blankIngredient());
-};
-
-const removeIngredient = (index) => {
-  if (form.ingredients.length === 1) return;
-  form.ingredients.splice(index, 1);
-};
-
-const addStep = () => {
-  form.steps.push('');
-};
-
-const removeStep = (index) => {
-  if (form.steps.length === 1) return;
-  form.steps.splice(index, 1);
-};
-
-const buildPayload = () => {
-  const tags = tagInput.value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-
-  const ingredients = form.ingredients
-    .filter((item) => item.name || item.quantity || item.unit)
-    .map((item) => ({
-      id: item.id || makeId(),
-      name: item.name,
-      quantity: item.quantity,
-      unit: item.unit,
-    }));
-
-  const steps = form.steps.map((step) => step.trim()).filter(Boolean);
-
-  return {
-    ...(isEditing.value && currentRecipe.value ? { id: currentRecipe.value.id } : {}),
-    title: form.title,
-    description: form.description,
-    author: form.author,
-    createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : new Date().toISOString(),
-    tags,
-    ingredients,
-    steps,
-    notes: form.notes,
-    servingsQuantity: form.servingsQuantity,
-    servingsUnit: form.servingsUnit,
-    cookbookId: form.cookbookId,
-  };
-};
-
-const save = async () => {
-  try {
-    isSaving.value = true;
-    if (isShareEdit.value) {
-      shareError.value = null;
-    }
-    const payload = buildPayload();
-    if (isShareEdit.value && shareToken.value) {
-      const res = await fetch(`/api/share/${shareToken.value}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to save recipe.');
-      router.push({ name: 'recipe-share-view', params: { token: shareToken.value } });
-    } else {
-      const saved = await store.saveRecipe(payload);
-      router.push({ name: 'recipe-detail', params: { id: saved.id } });
-    }
-  } catch (error) {
-    console.error(error);
-    if (isShareEdit.value) {
-      shareError.value = error.message || 'Unable to save recipe.';
-    }
-  } finally {
-    isSaving.value = false;
-  }
-};
-
-onMounted(() => {
-  settingsStore.loadSettings();
-  loadSharedRecipe();
-});
-
-watch(
-  () => cookbookOptions.value,
-  () => {
-    syncSelectedCookbook(form.cookbookId);
+  data() {
+    return {
+      store: useRecipeStore(),
+      settingsStore: useSettingsStore(),
+      auth: useAuthStore(),
+      form: {
+        title: '',
+        description: '',
+        author: '',
+        createdAt: today,
+        ingredients: [blankIngredient()],
+        steps: [''],
+        notes: '',
+        servingsQuantity: '',
+        servingsUnit: '',
+        cookbookId: '',
+      },
+      tagInput: '',
+      isSaving: false,
+      sharedRecipe: null,
+      shareError: null,
+      selectedCookbook: null,
+      units: ['cup', 'tbsp', 'tsp', 'g', 'kg', 'oz', 'ml', 'l', 'piece', 'pinch'],
+    };
   },
-  { immediate: true, deep: true }
-);
+  computed: {
+    shareToken() {
+      return this.$route.params.token;
+    },
+    isShareEdit() {
+      return this.$route.name === 'recipe-share-edit';
+    },
+    currentRecipe() {
+      return this.isShareEdit ? this.sharedRecipe : this.store.getRecipeById(this.$route.params.id);
+    },
+    isEditing() {
+      return Boolean(this.$route.params.id) || this.isShareEdit;
+    },
+    isShareOwner() {
+      return this.sharedRecipe && this.auth.state.user?.id === this.sharedRecipe.ownerId;
+    },
+    showCookbookSelect() {
+      return !this.isShareEdit || Boolean(this.isShareOwner);
+    },
+    cookbookReadonly() {
+      if (!this.isEditing) return false;
+      const ownerId = this.currentRecipe?.ownerId || '';
+      return Boolean(ownerId && this.auth.state.user?.id && ownerId !== this.auth.state.user.id);
+    },
+    cookbookOptions() {
+      const owned = (this.store.state.cookbooks || []).map((cb) => ({ ...cb, ownerUsername: 'You' }));
+      const editableShared = (this.store.state.sharedCookbooks || []).filter((cb) => cb.canEdit);
+      return [...owned, ...editableShared];
+    },
+    llmAvailable() {
+      return this.settingsStore.isLlmEnabled();
+    },
+  },
+  watch: {
+    currentRecipe: {
+      handler() {
+        this.hydrateForm();
+      },
+      immediate: true,
+    },
+    shareToken: {
+      handler() {
+        this.loadSharedRecipe();
+      },
+      immediate: true,
+    },
+    'store.state.importedDraft': {
+      handler(draft) {
+        if (!draft || this.isEditing) return;
+        this.applyDraft(draft, { replaceExisting: true });
+        this.store.consumeImportedDraft();
+      },
+      immediate: true,
+    },
+    cookbookOptions: {
+      handler() {
+        this.syncSelectedCookbook(this.form.cookbookId);
+      },
+      deep: true,
+      immediate: true,
+    },
+    selectedCookbook(cb) {
+      this.form.cookbookId = cb?.id || '';
+    },
+  },
+  mounted() {
+    this.settingsStore.loadSettings();
+    this.loadSharedRecipe();
+  },
+  methods: {
+    applyDraft(data, { replaceExisting = false } = {}) {
+      if (!data) return;
+      const setField = (key, value) => {
+        if (replaceExisting || value) {
+          this.form[key] = value ?? '';
+        }
+      };
 
-watch(
-  () => selectedCookbook.value,
-  (cb) => {
-    form.cookbookId = cb?.id || '';
-  }
-);
+      setField('title', data.title);
+      setField('description', data.description);
+      setField('author', data.author);
+      if (replaceExisting && data.createdAt) {
+        this.form.createdAt = new Date(data.createdAt).toISOString().slice(0, 10);
+      }
+      setField('notes', data.notes);
+      setField('servingsQuantity', data.servingsQuantity);
+      setField('servingsUnit', data.servingsUnit);
+      setField('cookbookId', data.cookbookId);
 
-const syncSelectedCookbook = (cookbookId) => {
-  if (!showCookbookSelect.value) return;
-  const targetId = cookbookId || form.cookbookId;
-  if (targetId && selectedCookbook.value?.id === targetId) return;
+      const nextIngredients = (data.ingredients || []).map((item) => ({
+        id: item.id || makeId(),
+        name: item.name || '',
+        quantity: item.quantity ?? '',
+        unit: item.unit || '',
+      }));
+      if (replaceExisting || nextIngredients.length) {
+        this.form.ingredients = nextIngredients.length ? nextIngredients : [blankIngredient()];
+      }
 
-  const match = cookbookOptions.value.find((cb) => cb.id === targetId);
-  if (targetId && !match) {
-    // Keep the id around until options load; don't overwrite with blank.
-    return;
-  }
+      const nextSteps = (data.steps && data.steps.length ? [...data.steps] : ['']).map((step) => step || '');
+      if (replaceExisting || (data.steps && data.steps.length)) {
+        this.form.steps = nextSteps;
+      }
 
-  const fallback =
-    cookbookOptions.value.find((cb) => cb.isDefault) ||
-    cookbookOptions.value[0] ||
-    null;
+      if (replaceExisting || (data.tags && data.tags.length)) {
+        this.tagInput = (data.tags || []).join(', ');
+      }
+    },
+    hydrateForm() {
+      if (!this.isEditing || !this.currentRecipe) return;
+      this.applyDraft(this.currentRecipe, { replaceExisting: true });
+      this.syncSelectedCookbook(this.currentRecipe.cookbookId);
+    },
+    async loadSharedRecipe() {
+      if (!this.isShareEdit || !this.shareToken) return;
+      this.shareError = null;
+      try {
+        const res = await fetch(`/api/share/${this.shareToken}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to load shared recipe.');
+        this.sharedRecipe = data.recipe;
+        this.applyDraft(data.recipe, { replaceExisting: true });
+        this.syncSelectedCookbook(data.recipe.cookbookId);
+      } catch (err) {
+        this.shareError = err.message || 'Unable to load shared recipe.';
+      }
+    },
+    addIngredient() {
+      this.form.ingredients.push(blankIngredient());
+    },
+    removeIngredient(index) {
+      if (this.form.ingredients.length === 1) return;
+      this.form.ingredients.splice(index, 1);
+    },
+    addStep() {
+      this.form.steps.push('');
+    },
+    removeStep(index) {
+      if (this.form.steps.length === 1) return;
+      this.form.steps.splice(index, 1);
+    },
+    buildPayload() {
+      const tags = this.tagInput
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
 
-  selectedCookbook.value = match || fallback;
-  form.cookbookId = selectedCookbook.value?.id || '';
+      const ingredients = this.form.ingredients
+        .filter((item) => item.name || item.quantity || item.unit)
+        .map((item) => ({
+          id: item.id || makeId(),
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+        }));
+
+      const steps = this.form.steps.map((step) => step.trim()).filter(Boolean);
+
+      return {
+        ...(this.isEditing && this.currentRecipe ? { id: this.currentRecipe.id } : {}),
+        title: this.form.title,
+        description: this.form.description,
+        author: this.form.author,
+        createdAt: this.form.createdAt ? new Date(this.form.createdAt).toISOString() : new Date().toISOString(),
+        tags,
+        ingredients,
+        steps,
+        notes: this.form.notes,
+        servingsQuantity: this.form.servingsQuantity,
+        servingsUnit: this.form.servingsUnit,
+        cookbookId: this.form.cookbookId,
+      };
+    },
+    async save() {
+      try {
+        this.isSaving = true;
+        if (this.isShareEdit) {
+          this.shareError = null;
+        }
+        const payload = this.buildPayload();
+        if (this.isShareEdit && this.shareToken) {
+          const res = await fetch(`/api/share/${this.shareToken}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data?.error || 'Unable to save recipe.');
+          this.$router.push({ name: 'recipe-share-view', params: { token: this.shareToken } });
+        } else {
+          const saved = await this.store.saveRecipe(payload);
+          this.$router.push({ name: 'recipe-detail', params: { id: saved.id } });
+        }
+      } catch (error) {
+        console.error(error);
+        if (this.isShareEdit) {
+          this.shareError = error.message || 'Unable to save recipe.';
+        }
+      } finally {
+        this.isSaving = false;
+      }
+    },
+    syncSelectedCookbook(cookbookId) {
+      if (!this.showCookbookSelect) return;
+      const targetId = cookbookId || this.form.cookbookId;
+      if (targetId && this.selectedCookbook?.id === targetId) return;
+
+      const match = this.cookbookOptions.find((cb) => cb.id === targetId);
+      if (targetId && !match) {
+        // Keep the id around until options load; don't overwrite with blank.
+        return;
+      }
+
+      const fallback =
+        this.cookbookOptions.find((cb) => cb.isDefault) ||
+        this.cookbookOptions[0] ||
+        null;
+
+      this.selectedCookbook = match || fallback;
+      this.form.cookbookId = this.selectedCookbook?.id || '';
+    },
+  },
 };
 </script>
