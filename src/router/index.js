@@ -3,6 +3,7 @@ import HomePage from '../pages/recipies/HomePage.vue';
 import RecipeDetailPage from '../pages/recipies/RecipeDetailPage.vue';
 import RecipeFormPage from '../pages/recipies/RecipeFormPage.vue';
 import RecipeImportPage from '../pages/recipies/RecipeImportPage.vue';
+import CookbookSharePage from '../pages/recipies/CookbookSharePage.vue';
 import LoginPage from '../pages/login/LoginPage.vue';
 import SignupPage from '../pages/login/SignupPage.vue';
 import AdminUsersPage from '../pages/settings/AdminUsersPage.vue';
@@ -20,6 +21,13 @@ const router = createRouter({
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeFormPage, props: true, meta: { requiresAuth: true } },
     { path: '/share/:token', name: 'recipe-share-view', component: RecipeDetailPage, props: true, meta: { allowShare: true } },
     { path: '/share/:token/edit', name: 'recipe-share-edit', component: RecipeFormPage, props: true, meta: { allowShare: true } },
+    {
+      path: '/cookbook-share/:token',
+      name: 'cookbook-share-view',
+      component: CookbookSharePage,
+      props: true,
+      meta: { allowShare: true, hideSidebar: true },
+    },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/signup', name: 'signup', component: SignupPage },
     {

@@ -6,14 +6,14 @@
       @go-home="goHome"
       @create-cookbook="openCreateCookbook"
     />
-    <div v-if="showAppShell" class="grid min-h-screen md:grid-cols-[320px_1fr]">
+    <div v-if="showAppShell" :class="['grid min-h-screen', showSidebar ? 'md:grid-cols-[320px_1fr]' : '']">
       <SettingsSidebar
         v-if="showSettingsSidebar"
         :pending-count="friendStore.pendingCount()"
         :show-admin="canSeeAdmin"
         />
       <RecipeSidebar
-        v-else
+        v-else-if="showSidebar"
         :recipes="recipes"
         :shared-recipes="sharedRecipes"
         :cookbooks="cookbooks"
@@ -69,9 +69,11 @@ const activeId = computed(() => route.params.id);
 const sharedRecipes = computed(() => store.state.sharedRecipes);
 const activeShareToken = computed(() => route.params.token);
 const authRoutes = computed(() => ['login', 'signup']);
+const hideSidebar = computed(() => Boolean(route.meta?.hideSidebar));
 const canSeeAdmin = computed(() => ['owner', 'admin'].includes(auth.state.user?.role));
 const isSettingsRoute = computed(() => Boolean(route.meta?.settingsPage));
-const showSettingsSidebar = computed(() => isSettingsRoute.value);
+const showSettingsSidebar = computed(() => isSettingsRoute.value && !hideSidebar.value);
+const showSidebar = computed(() => !hideSidebar.value && !isSettingsRoute.value);
 const showAppShell = computed(() => auth.state.user && !authRoutes.value.includes(route.name));
 const showCookbookDialog = ref(false);
 const selectedCookbook = ref(null);
