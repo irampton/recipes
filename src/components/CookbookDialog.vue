@@ -158,7 +158,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useAuthStore } from '../stores/authStore';
 import UserAutocomplete from './UserAutocomplete.vue';
-import ToggleSwitch from './ToggleSwitch.vue';
+import ToggleSwitch from '../baseComponets/ToggleSwitch.vue';
 
 const props = defineProps({
   open: {

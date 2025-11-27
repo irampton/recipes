@@ -145,9 +145,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { ArrowDownTrayIcon, ArrowPathIcon } from '@heroicons/vue/24/outline';
-import { importRecipeFromText } from '../services/importer';
-import { useRecipeStore } from '../stores/recipeStore';
-import { useSettingsStore } from '../stores/settingsStore';
+import { importRecipeFromText } from '../../services/importer.js';
+import { useRecipeStore } from '../../stores/recipeStore.js';
+import { useSettingsStore } from '../../stores/settingsStore.js';
 
 const router = useRouter();
 const store = useRecipeStore();

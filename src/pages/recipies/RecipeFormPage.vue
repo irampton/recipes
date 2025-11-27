@@ -278,11 +278,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { ArrowDownTrayIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/vue/24/outline';
-import UserAutocomplete from '../components/UserAutocomplete.vue';
-import CookbookSelect from '../components/CookbookSelect.vue';
-import { useRecipeStore } from '../stores/recipeStore';
-import { useSettingsStore } from '../stores/settingsStore';
-import { useAuthStore } from '../stores/authStore';
+import UserAutocomplete from '../../components/UserAutocomplete.vue';
+import CookbookSelect from '../../components/CookbookSelect.vue';
+import { useRecipeStore } from '../../stores/recipeStore.js';
+import { useSettingsStore } from '../../stores/settingsStore.js';
+import { useAuthStore } from '../../stores/authStore.js';
 
 const store = useRecipeStore();
 const settingsStore = useSettingsStore();

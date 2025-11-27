@@ -1,13 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import HomePage from '../pages/HomePage.vue';
-import RecipeDetailPage from '../pages/RecipeDetailPage.vue';
-import RecipeFormPage from '../pages/RecipeFormPage.vue';
-import RecipeImportPage from '../pages/RecipeImportPage.vue';
-import LoginPage from '../pages/LoginPage.vue';
-import SignupPage from '../pages/SignupPage.vue';
-import AdminUsersPage from '../pages/admin/AdminUsersPage.vue';
-import AdminServerSettingsPage from '../pages/admin/AdminServerSettingsPage.vue';
-import FriendsPage from '../pages/FriendsPage.vue';
+import HomePage from '../pages/recipies/HomePage.vue';
+import RecipeDetailPage from '../pages/recipies/RecipeDetailPage.vue';
+import RecipeFormPage from '../pages/recipies/RecipeFormPage.vue';
+import RecipeImportPage from '../pages/recipies/RecipeImportPage.vue';
+import LoginPage from '../pages/login/LoginPage.vue';
+import SignupPage from '../pages/login/SignupPage.vue';
+import AdminUsersPage from '../pages/settings/AdminUsersPage.vue';
+import AdminServerSettingsPage from '../pages/settings/AdminServerSettingsPage.vue';
+import FriendsPage from '../pages/settings/FriendsPage.vue';
 import { useAuthStore } from '../stores/authStore';
 
 const router = createRouter({
@@ -30,13 +30,13 @@ const router = createRouter({
     },
     { path: '/admin', redirect: { name: 'admin-users' } },
     {
-      path: '/admin/users',
+      path: '/settings/users',
       name: 'admin-users',
       component: AdminUsersPage,
       meta: { requiresAuth: true, requiresAdmin: true, isAdminPage: true, settingsPage: true },
     },
     {
-      path: '/admin/server-settings',
+      path: '/settings/server-settings',
       name: 'admin-server-settings',
       component: AdminServerSettingsPage,
       meta: { requiresAuth: true, requiresAdmin: true, isAdminPage: true, settingsPage: true },

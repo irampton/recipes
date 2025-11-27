@@ -135,7 +135,7 @@
 
 <script setup>
 import { computed, onMounted, reactive } from 'vue';
-import ConfirmDialog from '../../components/ConfirmDialog.vue';
+import ConfirmDialog from '../../baseComponets/ConfirmDialog.vue';
 import { useAuthStore } from '../../stores/authStore';
 
 const auth = useAuthStore();

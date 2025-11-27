@@ -197,8 +197,8 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import SettingsSidebar from '../components/SettingsSidebar.vue';
-import { useFriendStore } from '../stores/friendStore';
+import SettingsSidebar from '../../components/SettingsSidebar.vue';
+import { useFriendStore } from '../../stores/friendStore.js';
 
 const friendStore = useFriendStore();
 
